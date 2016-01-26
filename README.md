@@ -6,6 +6,7 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 - Watchdog?
 - Kø/oppførsel
 - Håndtering av input (knapper)
+- Hardware interface (driveren er c-kode)
 
 ### Samarbeidende heiser
 - Valg av strategi med 1, 2 og 3 heiser i systemet
@@ -17,9 +18,8 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 - Brukeren trykker som en gal på kontrollpanel(ene)
 - Strømmen på en enkelt heis skrus av (og senere på igjen)
 
-### Ting vi ikke trenger å ta hensyn til
-- Flere feil-tester fra stud.ass. samtidig
-- Flere oppdelte små nettverk (f.eks. to og to maskiner som kan kommunisere)
-- Stopp-knapp og obstruksjonsbryter
-- En gjeng med trollete brukere står og holder alle heisdørene åpne, slik at heisene ikke kan betjene andre ordre
-- Strømmen på hele labben skrus av -> hele systemet inkl. OS må restartes
+## Assumptions
+At least one elevator is always alive
+Stop button & Obstruction switch are disabled
+No multiple simultaneous errors
+No network partitioning
