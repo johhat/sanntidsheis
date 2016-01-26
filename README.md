@@ -8,6 +8,7 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 - Håndtering av input (knapper)
 - Hardware interface (driveren er c-kode)
 - Loggføringsmodul (for å slippe å ha debug-ting i koden)
+- Timer?
 
 ### Samarbeidende heiser
 - Valg av strategi med 1, 2 og 3 heiser i systemet (prinsipielt n heiser)
