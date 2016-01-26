@@ -4,7 +4,7 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 ## Moduler
 - Nettverksmodul
 - Watchdog?
-- Kø/oppførsel
+- Kø/oppførsel (keyword REDUNDANS)
 - Håndtering av input (knapper)
 - Hardware interface (driveren er c-kode)
 
