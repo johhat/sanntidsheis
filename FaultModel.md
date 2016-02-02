@@ -16,7 +16,7 @@ Write
 
 ### 2. Detection
 - Write also address, checksum, versionId, statusbits
-- Al errors -> fail
+- All errors -> fail
 - Make the "decay thread" that flips status bits (error injection for testing)
 
 ### 3. Redundancy
