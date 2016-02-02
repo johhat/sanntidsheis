@@ -62,3 +62,8 @@ b) Process pairs
 - Primary sends IAmAlive/heartbeat messages to backup
 - Primary does the work
 - Primary sends checkpoints to backup
+c) Persistent process
+- Assumes "transactional" infrastructure
+- All calculations are transactions from one consistent state to another
+- The processes are stateless
+- Now the OS can take care of fault tolerance
