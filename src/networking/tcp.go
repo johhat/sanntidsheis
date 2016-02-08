@@ -1,9 +1,9 @@
 package tcp
 
-import{
+import (
 	"net"
 	"fmt"
-}
+)
 
 
 func tcpSend(){
@@ -18,6 +18,6 @@ func tcpConnect(){
 
 }
 
-func tcpWorker(){
+func TcpWorker(){
 	
 }
