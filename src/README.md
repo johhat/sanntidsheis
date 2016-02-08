@@ -2,7 +2,7 @@
 Heisprosjekt i TTK4145 Sanntidsprogrammering
 
 ## Branching model
-Master: code should be tested and found working before merging into master. Do not commit new code directy here.
+Master: code should be tested and found working before merging into master. Do not commit new code directly here.
 
 New feature: create new branch -> develop -> test -> add pull request to master (and then possibly close the feature branch)
 
