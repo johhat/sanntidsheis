@@ -1,23 +1,26 @@
 package tcp
 
 import (
-	"net"
 	"fmt"
+	"net"
 )
 
+func Sum(a, b int) int {
+	return a + b
+}
 
-func tcpSend(){
+func tcpSend() {
 
 }
 
-func tcpRecv(){
+func tcpRecv() {
 
 }
 
-func tcpConnect(){
+func tcpConnect() {
 
 }
 
-func TcpWorker(){
-	
+func TcpWorker() {
+
 }
