@@ -1,7 +1,9 @@
 package main
 
-//Source: http://synflood.at/tmp/golang-slides/mrmcd2012.html
-//Test fra shell: echo -n "Random string" | nc localhost 6000
+//Explanation: http://synflood.at/tmp/golang-slides/mrmcd2012.html
+//Source: https://github.com/akrennmair/telnet-chat/blob/master/03_chat/chat.go
+//Test fra shell  I: echo -n "Random string" | nc localhost 6000
+//Test fra shell II: nc localhost 6000
 
 import (
 	"bufio"
@@ -45,18 +47,23 @@ func handleMessages(msgchan <-chan string, addchan <-chan Client, rmchan <-chan 
 
 	for {
 		select {
-		case msg := <-msgchan: //Broadcast on TCP
+		case msg := <-msgchan:
+			//Broadcast on TCP
 			for _, ch := range clients {
 				go func(mch chan<- string) {
 					mch <- "\033[1;33;30m" + msg + "\033[m\r\n"
 				}(ch)
 			}
-		case client := <-addchan: //Add client to list
+		case client := <-addchan:
+			//Add client to list
 			clients[client.conn] = client.ch
-		case client := <-rmchan: //Remove client from list
+			log.Println(clients)
+		case client := <-rmchan:
+			//Remove client from list
 			log.Printf("Client disconnects: %s\n", client.id)
 			delete(clients, client.conn)
-		case <-time.Tick(10 * time.Second): //Send heartbeat on TCP
+		case <-time.Tick(10 * time.Second):
+			//Send heartbeat on TCP
 			for _, ch := range clients {
 				go func(mch chan<- string) {
 					mch <- "\033[1;33;30m" + "Heartbeat from server" + "\033[m\r\n"
@@ -79,17 +86,15 @@ func handleConnection(connection net.Conn, msgchan chan<- string, addchan chan<-
 	addchan <- client
 
 	defer func() {
-		msgchan <- fmt.Sprintf("Client %s disconnected.\n", client.id)
 		log.Printf("Connection from %v closed.\n", connection.RemoteAddr())
 		rmchan <- client
 	}()
 
-	io.WriteString(connection, fmt.Sprintf("Welcome, %s!\n\n", client.id))
 	msgchan <- fmt.Sprintf("New user %s has joined the chat room.\n", client.id)
 
 	// I/O
 	go client.RecieveFrom(msgchan)
-	client.SendTo(client.ch) //This blocks
+	client.SendTo(client.ch)
 }
 
 func main() {
