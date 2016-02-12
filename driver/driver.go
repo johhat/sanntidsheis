@@ -1,40 +1,126 @@
-package main
-
-/*
-	#cgo CFLAGS: -std=c11
-	#cgo LDFLAGS: -lcomedi -lm
-	#include "channels.h"
-	#include "io.h"
-	#include "io.c"
-*/
-import "C"
+package driver
 
 import (
 	. "./channels"
-	"fmt"
+	. "./elevatorIo"
 	"log"
 	"os"
+	"time"
+)
+
+type BtnType int
+
+type ClickEvent struct {
+	Floor int
+	Type  BtnType
+}
+
+const (
+	NumFloors    = 4
+	InvalidFloor = -1
+	MotorSpeed   = 2800
+	PollInterval = 20 * time.Millisecond
 )
 
 const (
-	NumFloors       = 4
-	InvalidFloor    = -1
-	InitFailureCode = 0
-	MotorSpeed      = 2800
+	Up BtnType = iota
+	Down
+	Command
 )
 
-func main() {
-	fmt.Println("Hello there")
-	initialize()
-	fmt.Println("Init-ed")
-	fmt.Println("Floor sensor:", getFloorSensorSignal())
+func pollFloorSensor(sensorEventChan chan int) {
+
+	state := -1
+
+	for {
+		sensorSignal := getFloorSensorSignal()
+
+		if state != sensorSignal {
+			if state > -1 {
+				log.Println("Exited floor", state)
+			} else {
+				log.Println("Entered floor", sensorSignal)
+			}
+
+			state = sensorSignal
+
+			sensorEventChan <- state
+		}
+		time.Sleep(PollInterval)
+	}
 }
 
-func initialize() {
-	status := C.io_init()
+func pollCommandButtons(clickEventChan chan ClickEvent) {
 
-	if status == InitFailureCode {
-		log.Fatal("Hardware initialization failed. Exiting prorgram.")
+	var isPressed [NumFloors]bool
+
+	for {
+		for i := 0; i < NumFloors; i++ {
+			if isPressed[i] != getCommandBtnSignal(i) {
+				isPressed[i] = !isPressed[i]
+				if isPressed[i] {
+					clickEventChan <- ClickEvent{i, Command}
+				}
+			}
+		}
+		time.Sleep(PollInterval)
+	}
+}
+
+func pollOrderButtons(clickEventChan chan ClickEvent) {
+
+	var isPressed [2][NumFloors]bool
+
+	for {
+		for i := 0; i < NumFloors; i++ {
+
+			if isPressed[Up][i] != getOrderBtnSignal(i, true) {
+
+				isPressed[Up][i] = !isPressed[Up][i]
+
+				if isPressed[Up][i] {
+					clickEventChan <- ClickEvent{i, Up}
+				}
+			}
+
+			if isPressed[Down][i] != getOrderBtnSignal(i, false) {
+
+				isPressed[Down][i] = !isPressed[Down][i]
+
+				if isPressed[Down][i] {
+					clickEventChan <- ClickEvent{i, Down}
+				}
+			}
+		}
+		time.Sleep(PollInterval)
+	}
+}
+
+func basicElevator() {
+
+	setMotorDirection(1)
+
+	for {
+		switch {
+		case getFloorSensorSignal() == 0:
+			setMotorDirection(1)
+		case getFloorSensorSignal() == 3:
+			setMotorDirection(-1)
+		case getObstructionSignal():
+			setMotorDirection(0)
+			os.Exit(1)
+		case getStopSignal():
+			setMotorDirection(0)
+			os.Exit(1)
+		}
+	}
+}
+
+func Initialize(clickEventChan chan ClickEvent, sensorEventChan chan int) {
+	err := InitializeElevatorIo()
+
+	if err != nil {
+		log.Fatal(err)
 		os.Exit(1)
 	}
 
@@ -42,33 +128,81 @@ func initialize() {
 	setDoorOpenLamp(false)
 	setFloorIndicator(0)
 
-	setBit(LIGHT_DOWN2)
-
 	for i := 0; i < NumFloors; i++ {
-		setCommandBtn(i, false)
-		setOrderBtn(i, true, false)
+		setCommandLamp(i, false)
 	}
+
+	for i := 0; i < NumFloors-1; i++ {
+		setOrderLamp(i, true, false)
+		setOrderLamp(i+1, false, false)
+	}
+
+	go pollFloorSensor(sensorEventChan)
+	go pollCommandButtons(clickEventChan)
+	go pollOrderButtons(clickEventChan)
+
+	basicElevator()
 }
 
 // Getters
 
-func getOrderBtnSignal() {
-	//Noop
+func getOrderBtnSignal(floor int, direction bool) bool {
+	if direction {
+		switch floor {
+		case 0:
+			return ReadBit(BUTTON_UP1) != 0
+		case 1:
+			return ReadBit(BUTTON_UP2) != 0
+		case 2:
+			return ReadBit(BUTTON_UP3) != 0
+		case 3:
+			return false
+		default:
+			log.Println("Tried to get signal from non-existent floor")
+			return false
+		}
+	} else {
+		switch floor {
+		case 0:
+			return false
+		case 1:
+			return ReadBit(BUTTON_DOWN2) != 0
+		case 2:
+			return ReadBit(BUTTON_DOWN3) != 0
+		case 3:
+			return ReadBit(BUTTON_DOWN4) != 0
+		default:
+			log.Println("Tried to get signal from non-existent floor")
+			return false
+		}
+	}
 }
 
-func getCommandBtnSignal() {
-	//Noop
+func getCommandBtnSignal(floor int) bool {
+	switch floor {
+	case 0:
+		return ReadBit(BUTTON_COMMAND1) != 0
+	case 1:
+		return ReadBit(BUTTON_COMMAND2) != 0
+	case 2:
+		return ReadBit(BUTTON_COMMAND3) != 0
+	case 3:
+		return ReadBit(BUTTON_COMMAND4) != 0
+	default:
+		log.Println("Tried to get command btn signal at non-existent floor:", floor)
+		return false
+	}
 }
 
 func getFloorSensorSignal() int {
 	switch {
-	case readBit(SENSOR_FLOOR1) != 0:
+	case ReadBit(SENSOR_FLOOR1) != 0:
 		return 0
-	case readBit(SENSOR_FLOOR2) != 0:
+	case ReadBit(SENSOR_FLOOR2) != 0:
 		return 1
-	case readBit(SENSOR_FLOOR3) != 0:
+	case ReadBit(SENSOR_FLOOR3) != 0:
 		return 2
-	case readBit(SENSOR_FLOOR4) != 0:
+	case ReadBit(SENSOR_FLOOR4) != 0:
 		return 3
 	default:
 		return -1
@@ -76,54 +210,51 @@ func getFloorSensorSignal() int {
 }
 
 func getStopSignal() bool {
-	return readBit(STOP) == 1
+	return ReadBit(STOP) == 1
 }
 
 func getObstructionSignal() bool {
-	return readBit(OBSTRUCTION) == 1
+	return ReadBit(OBSTRUCTION) == 1
 }
 
 // Setters
 
 func setMotorDirection(direction int) {
-
-	//NB: Ikke testet!
-
-	switch direction {
-	case -1:
-		setBit(MOTORDIR)
-		writeAnalog(MOTOR, MotorSpeed)
-	case 0:
-		writeAnalog(MOTOR, 0)
-	case 1:
-		clearBit(MOTORDIR)
-		writeAnalog(MOTOR, MotorSpeed)
+	switch {
+	case direction < 0:
+		SetBit(MOTORDIR)
+		WriteAnalog(MOTOR, MotorSpeed)
+	case direction == 0:
+		WriteAnalog(MOTOR, 0)
+	case direction > 0:
+		ClearBit(MOTORDIR)
+		WriteAnalog(MOTOR, MotorSpeed)
 	}
 }
 
 func setFloorIndicator(floor int) {
 	if floor&0x02 != 0 {
-		setBit(LIGHT_FLOOR_IND1)
+		SetBit(LIGHT_FLOOR_IND1)
 	} else {
-		clearBit(LIGHT_FLOOR_IND1)
+		ClearBit(LIGHT_FLOOR_IND1)
 	}
 
 	if floor&0x01 != 0 {
-		setBit(LIGHT_FLOOR_IND2)
+		SetBit(LIGHT_FLOOR_IND2)
 
 	} else {
-		clearBit(LIGHT_FLOOR_IND2)
+		ClearBit(LIGHT_FLOOR_IND2)
 	}
 }
 
-func setCommandBtn(floor int, setTo bool) {
+func setCommandLamp(floor int, setTo bool) {
 
 	var operation func(int)
 
 	if setTo {
-		operation = setBit
+		operation = SetBit
 	} else {
-		operation = clearBit
+		operation = ClearBit
 	}
 
 	switch floor {
@@ -140,14 +271,14 @@ func setCommandBtn(floor int, setTo bool) {
 	}
 }
 
-func setOrderBtn(floor int, direction bool, setTo bool) {
+func setOrderLamp(floor int, direction bool, setTo bool) {
 
 	var operation func(int)
 
 	if setTo {
-		operation = setBit
+		operation = SetBit
 	} else {
-		operation = clearBit
+		operation = ClearBit
 	}
 
 	if direction {
@@ -173,42 +304,20 @@ func setOrderBtn(floor int, direction bool, setTo bool) {
 			log.Println("Tried to set order btn at non-existent floor", floor, direction)
 		}
 	}
-
 }
 
 func setStopLamp(setTo bool) {
 	if setTo {
-		setBit(LIGHT_STOP)
+		SetBit(LIGHT_STOP)
 	} else {
-		clearBit(LIGHT_STOP)
+		ClearBit(LIGHT_STOP)
 	}
 }
 
 func setDoorOpenLamp(setTo bool) {
 	if setTo {
-		setBit(LIGHT_DOOR_OPEN)
+		SetBit(LIGHT_DOOR_OPEN)
 	} else {
-		clearBit(LIGHT_DOOR_OPEN)
+		ClearBit(LIGHT_DOOR_OPEN)
 	}
-}
-
-//Low level ops - consider moving to separate package
-func setBit(channel int) {
-	C.io_set_bit(C.int(channel))
-}
-
-func clearBit(channel int) {
-	C.io_clear_bit(C.int(channel))
-}
-
-func writeAnalog(channel, value int) {
-	C.io_write_analog(C.int(channel), C.int(value))
-}
-
-func readBit(channel int) int {
-	return int(C.io_read_bit(C.int(channel)))
-}
-
-func readAnalog(channel int) int {
-	return int(C.io_read_analog(C.int(channel)))
 }
