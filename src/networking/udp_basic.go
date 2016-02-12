@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	BROADCAST_ADDRESS = "255.255.255.255:6002"
+	BROADCAST_ADDRESS = "255.255.255.255:10001"
 )
 
 func recieve(recieveChan chan<- string, broadcastListener *net.UDPConn) {
@@ -49,7 +49,7 @@ func broadcast(broadcastChan <-chan string, localListener *net.UDPConn) {
 
 func main() {
 
-	addr, _ := net.ResolveUDPAddr("udp", ":6001")
+	addr, _ := net.ResolveUDPAddr("udp", ":10002")
 
 	localListener, err := net.ListenUDP("udp", addr)
 
