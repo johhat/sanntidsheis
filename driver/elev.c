@@ -1,5 +1,3 @@
-
-
 #include "elev.h"
 
 #include "channels.h"

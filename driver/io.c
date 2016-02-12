@@ -3,9 +3,7 @@
 #include "io.h"
 #include "channels.h"
 
-
 static comedi_t *it_g = NULL;
-
 
 int io_init(void) {
 
@@ -54,6 +52,3 @@ int io_read_analog(int channel) {
     comedi_data_read(it_g, channel >> 8, channel & 0xff, 0, AREF_GROUND, &data);
     return (int)data;
 }
-
-
-
