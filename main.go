@@ -14,14 +14,13 @@ func main() {
 		for {
 			select {
 			case ev := <-clickEventChan:
-				log.Println("Click event. Floor", ev.Floor, "Type", ev.Type)
+				log.Println(ev)
 			case sensor := <-sensorEventChan:
 				log.Println("Floor sensor signal", sensor)
 			}
 		}
 	}()
 
-	driver.Init0()
 	driver.Init(clickEventChan, sensorEventChan)
 	driver.BasicElevator()
 }

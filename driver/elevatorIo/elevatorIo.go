@@ -10,26 +10,29 @@ import "C"
 
 import (
 	"errors"
-	"log"
+	"sync"
 )
 
 const (
 	InitFailureCode = 0
 )
 
+var once sync.Once
+
 func InitializeElevatorIo() error {
 
 	err := errors.New("Elevator HW allready initialized.")
 
-	status := C.io_init()
+	once.Do(func() {
 
-	if status == InitFailureCode {
-		err = errors.New("Init of elevator IO failed.")
-	}
+		status := C.io_init()
 
-	err = nil
+		if status == InitFailureCode {
+			err = errors.New("Init of elevator IO failed.")
+		}
 
-	log.Println("IO init finished")
+		err = nil
+	})
 
 	return err
 }

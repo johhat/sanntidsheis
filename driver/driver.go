@@ -26,7 +26,7 @@ type ClickEvent struct {
 }
 
 func (event ClickEvent) String() string {
-	return fmt.Sprint("%s button click at floor %d", event.Type.String(), event.Floor)
+	return fmt.Sprintf("%s button click at floor %d", event.Type, event.Floor)
 }
 
 const (
@@ -84,8 +84,6 @@ func pollFloorSensor(sensorEventChan chan int) {
 
 func pollButtons(clickEventChan chan ClickEvent) {
 
-	// TODO: Test denne
-
 	var isPressed [NumBtnTypes][NumFloors]bool
 
 	for {
@@ -96,7 +94,7 @@ func pollButtons(clickEventChan chan ClickEvent) {
 					isPressed[BtnType(btn)][f] = !isPressed[BtnType(btn)][f]
 
 					if isPressed[BtnType(btn)][f] {
-						clickEventChan <- ClickEvent{btn, BtnType(btn)}
+						clickEventChan <- ClickEvent{f, BtnType(btn)}
 					}
 				}
 			}
@@ -126,9 +124,7 @@ func BasicElevator() {
 	}
 }
 
-func Init0() {
-
-	log.Println("Init HW")
+func init() {
 
 	err := InitializeElevatorIo()
 
@@ -137,35 +133,27 @@ func Init0() {
 		os.Exit(1)
 	}
 
-	log.Println("Set stuff")
-
 	setStopLamp(false)
-	//setDoorOpenLamp(false)
-	//setFloorIndicator(0)
-	//clearBtnLamps()
+	setDoorOpenLamp(false)
+	setFloorIndicator(0)
+	clearBtnLamps()
 
 	setMotorDirection(MotorDown)
 
-	log.Println("Go down")
-
-	for getFloorSensorSignal() != InvalidFloor {
-		//TODO: Legg inn timeout her. For-select-mønster f.eks.
+	for getFloorSensorSignal() == InvalidFloor {
+		//TODO: Add timeout
 	}
 
 	setMotorDirection(MotorStop)
-
-	log.Println("HW inti finished")
 }
 
 func Init(clickEventChan chan ClickEvent, sensorEventChan chan int) {
-	setStopLamp(false)
 	go pollFloorSensor(sensorEventChan)
 	go pollButtons(clickEventChan)
 }
 
 func clearBtnLamps() {
 	for f := 0; f < NumFloors; f++ {
-		//TODO: Test for btn BtnType = 0 for å unngå casting
 		for btn := 0; btn < NumBtnTypes; btn++ {
 			setBtnLamp(f, BtnType(btn), false)
 		}
@@ -174,8 +162,6 @@ func clearBtnLamps() {
 
 // Getters
 func getBtnSignal(floor int, button BtnType) bool {
-
-	// TODO: Test denne
 
 	if floor < 0 || floor >= NumFloors {
 		log.Println("Tried to get signal form non-existent floor")
@@ -252,8 +238,6 @@ func setFloorIndicator(floor int) {
 }
 
 func setBtnLamp(floor int, btn BtnType, setTo bool) {
-
-	// TODO: Test. Spesielt lys som ikke eksisterer.
 
 	var lightChannels = [NumFloors][NumBtnTypes]int{
 		[NumBtnTypes]int{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
