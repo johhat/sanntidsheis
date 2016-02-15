@@ -21,5 +21,6 @@ func main() {
 		}
 	}()
 
-	driver.Initialize(clickEventChan, sensorEventChan)
+	driver.Init(clickEventChan, sensorEventChan)
+	driver.BasicElevator()
 }

@@ -3,30 +3,69 @@ package driver
 import (
 	. "./channels"
 	. "./elevatorIo"
+	"fmt"
 	"log"
 	"os"
 	"time"
 )
 
+const (
+	NumFloors    = 4
+	NumBtnTypes  = 3
+	InvalidFloor = -1
+	MotorSpeed   = 2800
+	PollInterval = 20 * time.Millisecond
+)
+
 type BtnType int
+type MotorDirection int
 
 type ClickEvent struct {
 	Floor int
 	Type  BtnType
 }
 
-const (
-	NumFloors    = 4
-	InvalidFloor = -1
-	MotorSpeed   = 2800
-	PollInterval = 20 * time.Millisecond
-)
+func (event ClickEvent) String() string {
+	return fmt.Sprint("%s button click at floor %d", event.Type.String(), event.Floor)
+}
 
 const (
 	Up BtnType = iota
 	Down
 	Command
 )
+
+func (btn BtnType) String() string {
+	switch btn {
+	case Up:
+		return "Up"
+	case Down:
+		return "Down"
+	case Command:
+		return "Command"
+	default:
+		return fmt.Sprintf("Btn(%d)", btn)
+	}
+}
+
+const (
+	MotorUp MotorDirection = iota
+	MotorStop
+	MotorDown
+)
+
+func (direction MotorDirection) String() string {
+	switch direction {
+	case MotorUp:
+		return "Motor up"
+	case MotorStop:
+		return "Motor stop"
+	case MotorDown:
+		return "Motor down"
+	default:
+		return fmt.Sprintf("MotorDirection(%d)", direction)
+	}
+}
 
 func pollFloorSensor(sensorEventChan chan int) {
 
@@ -36,87 +75,58 @@ func pollFloorSensor(sensorEventChan chan int) {
 		sensorSignal := getFloorSensorSignal()
 
 		if state != sensorSignal {
-			if state > -1 {
-				log.Println("Exited floor", state)
-			} else {
-				log.Println("Entered floor", sensorSignal)
-			}
-
 			state = sensorSignal
-
 			sensorEventChan <- state
 		}
 		time.Sleep(PollInterval)
 	}
 }
 
-func pollCommandButtons(clickEventChan chan ClickEvent) {
+func pollButtons(clickEventChan chan ClickEvent) {
 
-	var isPressed [NumFloors]bool
+	// TODO: Test denne
+
+	var isPressed [NumBtnTypes][NumFloors]bool
 
 	for {
-		for i := 0; i < NumFloors; i++ {
-			if isPressed[i] != getCommandBtnSignal(i) {
-				isPressed[i] = !isPressed[i]
-				if isPressed[i] {
-					clickEventChan <- ClickEvent{i, Command}
+		for f := 0; f < NumFloors; f++ {
+
+			for btn := 0; i < NumBtnTypes; i++ {
+				if isPressed[BtnType(i)][f] != getBtnSignal(f, BtnType(i)) {
+					isPressed[BtnType(i)][f] = !isPressed[BtnType(i)][f]
+
+					if isPressed[BtnType(i)][f] {
+						clickEventChan <- ClickEvent{i, BtnType(i)}
+					}
 				}
 			}
+
 		}
 		time.Sleep(PollInterval)
 	}
 }
 
-func pollOrderButtons(clickEventChan chan ClickEvent) {
+func BasicElevator() {
 
-	var isPressed [2][NumFloors]bool
-
-	for {
-		for i := 0; i < NumFloors; i++ {
-
-			if isPressed[Up][i] != getOrderBtnSignal(i, true) {
-
-				isPressed[Up][i] = !isPressed[Up][i]
-
-				if isPressed[Up][i] {
-					clickEventChan <- ClickEvent{i, Up}
-				}
-			}
-
-			if isPressed[Down][i] != getOrderBtnSignal(i, false) {
-
-				isPressed[Down][i] = !isPressed[Down][i]
-
-				if isPressed[Down][i] {
-					clickEventChan <- ClickEvent{i, Down}
-				}
-			}
-		}
-		time.Sleep(PollInterval)
-	}
-}
-
-func basicElevator() {
-
-	setMotorDirection(1)
+	setMotorDirection(MotorUp)
 
 	for {
 		switch {
 		case getFloorSensorSignal() == 0:
-			setMotorDirection(1)
-		case getFloorSensorSignal() == 3:
-			setMotorDirection(-1)
+			setMotorDirection(MotorUp)
+		case getFloorSensorSignal() == NumFloors-1:
+			setMotorDirection(MotorDown)
 		case getObstructionSignal():
-			setMotorDirection(0)
+			setMotorDirection(MotorStop)
 			os.Exit(1)
 		case getStopSignal():
-			setMotorDirection(0)
+			setMotorDirection(MotorStop)
 			os.Exit(1)
 		}
 	}
 }
 
-func Initialize(clickEventChan chan ClickEvent, sensorEventChan chan int) {
+func init() {
 	err := InitializeElevatorIo()
 
 	if err != nil {
@@ -127,69 +137,53 @@ func Initialize(clickEventChan chan ClickEvent, sensorEventChan chan int) {
 	setStopLamp(false)
 	setDoorOpenLamp(false)
 	setFloorIndicator(0)
+	clearBtnLamps()
 
-	for i := 0; i < NumFloors; i++ {
-		setCommandLamp(i, false)
+	setMotorDirection(MotorDown)
+
+	for getFloorSensorSignal() != InvalidFloor {
+		//TODO: Legg inn timeout her. For-select-mønster f.eks.
 	}
 
-	for i := 0; i < NumFloors-1; i++ {
-		setOrderLamp(i, true, false)
-		setOrderLamp(i+1, false, false)
-	}
+	setMotorDirection(MotorStop)
+}
 
+func Init(clickEventChan chan ClickEvent, sensorEventChan chan int) {
 	go pollFloorSensor(sensorEventChan)
-	go pollCommandButtons(clickEventChan)
-	go pollOrderButtons(clickEventChan)
+	go pollButtons(clickEventChan)
+}
 
-	basicElevator()
+func clearBtnLamps() {
+	for f := 0; f < NumFloors; f++ {
+		//TODO: Test for btn BtnType = 0 for å unngå casting
+		for btn := 0; btn < NumBtnTypes; btn++ {
+			setBtnLamp(f, BtnType(btn), false)
+		}
+	}
 }
 
 // Getters
+func getBtnSignal(floor int, button BtnType) bool {
 
-func getOrderBtnSignal(floor int, direction bool) bool {
-	if direction {
-		switch floor {
-		case 0:
-			return ReadBit(BUTTON_UP1) != 0
-		case 1:
-			return ReadBit(BUTTON_UP2) != 0
-		case 2:
-			return ReadBit(BUTTON_UP3) != 0
-		case 3:
-			return false
-		default:
-			log.Println("Tried to get signal from non-existent floor")
-			return false
-		}
-	} else {
-		switch floor {
-		case 0:
-			return false
-		case 1:
-			return ReadBit(BUTTON_DOWN2) != 0
-		case 2:
-			return ReadBit(BUTTON_DOWN3) != 0
-		case 3:
-			return ReadBit(BUTTON_DOWN4) != 0
-		default:
-			log.Println("Tried to get signal from non-existent floor")
-			return false
-		}
+	// TODO: Test denne
+
+	if floor < 0 || floor >= NumFloors {
+		log.Println("Tried to get signal form non-existent floor")
+		return false
 	}
-}
 
-func getCommandBtnSignal(floor int) bool {
-	switch floor {
-	case 0:
-		return ReadBit(BUTTON_COMMAND1) != 0
-	case 1:
-		return ReadBit(BUTTON_COMMAND2) != 0
-	case 2:
-		return ReadBit(BUTTON_COMMAND3) != 0
-	case 3:
-		return ReadBit(BUTTON_COMMAND4) != 0
+	var buttonChannels = [NumFloors][NumBtnTypes]int{
+		[NumBtnTypes]int{BUTTON_UP1, BUTTON_DOWN1, BUTTON_COMMAND1},
+		[NumBtnTypes]int{BUTTON_UP2, BUTTON_DOWN2, BUTTON_COMMAND2},
+		[NumBtnTypes]int{BUTTON_UP3, BUTTON_DOWN3, BUTTON_COMMAND3},
+		[NumBtnTypes]int{BUTTON_UP4, BUTTON_DOWN4, BUTTON_COMMAND4},
+	}
+
+	switch BtnType {
+	case Up, Down, Command:
+		return ReadBit(buttonChannels[floor][int(BtnType)])
 	default:
-		log.Println("Tried to get command btn signal at non-existent floor:", floor)
+		log.Println("Tried to get signal form non-existent btn")
 		return false
 	}
 }
@@ -219,14 +213,14 @@ func getObstructionSignal() bool {
 
 // Setters
 
-func setMotorDirection(direction int) {
-	switch {
-	case direction < 0:
+func setMotorDirection(direction MotorDirection) {
+	switch direction {
+	case MotorDown:
 		SetBit(MOTORDIR)
 		WriteAnalog(MOTOR, MotorSpeed)
-	case direction == 0:
+	case MotorStop:
 		WriteAnalog(MOTOR, 0)
-	case direction > 0:
+	case MotorUp:
 		ClearBit(MOTORDIR)
 		WriteAnalog(MOTOR, MotorSpeed)
 	}
@@ -247,62 +241,26 @@ func setFloorIndicator(floor int) {
 	}
 }
 
-func setCommandLamp(floor int, setTo bool) {
+func setBtnLamp(floor int, btn BtnType, setTo bool) {
 
-	var operation func(int)
+	// TODO: Test. Spesielt lys som ikke eksisterer.
 
-	if setTo {
-		operation = SetBit
-	} else {
-		operation = ClearBit
+	var lightChannels = [numFloors][NumBtnTypes]int{
+		[NumBtnTypes]int{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
+		[NumBtnTypes]int{LIGHT_UP2, LIGHT_DOWN2, LIGHT_COMMAND2},
+		[NumBtnTypes]int{LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3},
+		[NumBtnTypes]int{LIGHT_UP4, LIGHT_DOWN4, LIGHT_COMMAND4},
 	}
 
-	switch floor {
-	case 0:
-		operation(LIGHT_COMMAND1)
-	case 1:
-		operation(LIGHT_COMMAND2)
-	case 2:
-		operation(LIGHT_COMMAND3)
-	case 3:
-		operation(LIGHT_COMMAND4)
+	switch btn {
+	case Up, Down, Command:
+		if setTo {
+			SetBit(lightChannels[floor][int(btn)])
+		} else {
+			ClearBit(lightChannels[floor][int(btn)])
+		}
 	default:
-		log.Println("Tried to set command btn at non-existent floor", floor)
-	}
-}
-
-func setOrderLamp(floor int, direction bool, setTo bool) {
-
-	var operation func(int)
-
-	if setTo {
-		operation = SetBit
-	} else {
-		operation = ClearBit
-	}
-
-	if direction {
-		switch floor {
-		case 0:
-			operation(LIGHT_UP1)
-		case 1:
-			operation(LIGHT_UP2)
-		case 2:
-			operation(LIGHT_UP3)
-		default:
-			log.Println("Tried to set order btn at non-existent floor", floor, direction)
-		}
-	} else {
-		switch floor {
-		case 1:
-			operation(LIGHT_DOWN2)
-		case 2:
-			operation(LIGHT_DOWN3)
-		case 3:
-			operation(LIGHT_DOWN4)
-		default:
-			log.Println("Tried to set order btn at non-existent floor", floor, direction)
-		}
+		log.Println("Btn type failure in setBtnLamp. Floor: ", floor)
 	}
 }
 
