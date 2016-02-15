@@ -91,12 +91,12 @@ func pollButtons(clickEventChan chan ClickEvent) {
 	for {
 		for f := 0; f < NumFloors; f++ {
 
-			for btn := 0; i < NumBtnTypes; i++ {
-				if isPressed[BtnType(i)][f] != getBtnSignal(f, BtnType(i)) {
-					isPressed[BtnType(i)][f] = !isPressed[BtnType(i)][f]
+			for btn := 0; btn < NumBtnTypes; btn++ {
+				if isPressed[BtnType(btn)][f] != getBtnSignal(f, BtnType(btn)) {
+					isPressed[BtnType(btn)][f] = !isPressed[BtnType(btn)][f]
 
-					if isPressed[BtnType(i)][f] {
-						clickEventChan <- ClickEvent{i, BtnType(i)}
+					if isPressed[BtnType(btn)][f] {
+						clickEventChan <- ClickEvent{btn, BtnType(btn)}
 					}
 				}
 			}
@@ -126,7 +126,10 @@ func BasicElevator() {
 	}
 }
 
-func init() {
+func Init0() {
+
+	log.Println("Init HW")
+
 	err := InitializeElevatorIo()
 
 	if err != nil {
@@ -134,21 +137,28 @@ func init() {
 		os.Exit(1)
 	}
 
+	log.Println("Set stuff")
+
 	setStopLamp(false)
-	setDoorOpenLamp(false)
-	setFloorIndicator(0)
-	clearBtnLamps()
+	//setDoorOpenLamp(false)
+	//setFloorIndicator(0)
+	//clearBtnLamps()
 
 	setMotorDirection(MotorDown)
+
+	log.Println("Go down")
 
 	for getFloorSensorSignal() != InvalidFloor {
 		//TODO: Legg inn timeout her. For-select-mønster f.eks.
 	}
 
 	setMotorDirection(MotorStop)
+
+	log.Println("HW inti finished")
 }
 
 func Init(clickEventChan chan ClickEvent, sensorEventChan chan int) {
+	setStopLamp(false)
 	go pollFloorSensor(sensorEventChan)
 	go pollButtons(clickEventChan)
 }
@@ -179,9 +189,9 @@ func getBtnSignal(floor int, button BtnType) bool {
 		[NumBtnTypes]int{BUTTON_UP4, BUTTON_DOWN4, BUTTON_COMMAND4},
 	}
 
-	switch BtnType {
+	switch button {
 	case Up, Down, Command:
-		return ReadBit(buttonChannels[floor][int(BtnType)])
+		return ReadBit(buttonChannels[floor][int(button)]) != 0
 	default:
 		log.Println("Tried to get signal form non-existent btn")
 		return false
@@ -245,7 +255,7 @@ func setBtnLamp(floor int, btn BtnType, setTo bool) {
 
 	// TODO: Test. Spesielt lys som ikke eksisterer.
 
-	var lightChannels = [numFloors][NumBtnTypes]int{
+	var lightChannels = [NumFloors][NumBtnTypes]int{
 		[NumBtnTypes]int{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
 		[NumBtnTypes]int{LIGHT_UP2, LIGHT_DOWN2, LIGHT_COMMAND2},
 		[NumBtnTypes]int{LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3},
