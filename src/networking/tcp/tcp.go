@@ -97,7 +97,7 @@ func handleConnection(connection net.Conn, msgchan chan<- string, addchan chan<-
 	client.SendTo(client.ch)
 }
 
-func main() {
+func listen() {
 	listener, err := net.Listen("tcp", ":6000")
 
 	if err != nil {
@@ -123,4 +123,12 @@ func main() {
 
 		go handleConnection(connection, msgchan, addchan, rmchan)
 	}
+}
+
+func dial() {
+
+}
+
+func Init(tcpMsg, tcpConnected, tcpConnectionFailure, tcpDial chan string) {
+
 }
