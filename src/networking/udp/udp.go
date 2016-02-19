@@ -1,14 +1,14 @@
-package main
+package udp
 
 import (
 	"log"
 	"net"
-	"os"
 	"time"
 )
 
 const (
-	BROADCAST_ADDRESS = "255.255.255.255:10001"
+	broadcastAddress  = "255.255.255.255:10001"
+	heartBeatInterval = 10
 )
 
 func recieve(recieveChan chan<- string, broadcastListener *net.UDPConn) {
@@ -28,13 +28,13 @@ func recieve(recieveChan chan<- string, broadcastListener *net.UDPConn) {
 			panic(err)
 		}
 
-		recieveChan <- string(buffer) + " from " + address.String()
+		recieveChan <- address.IP.String()
 	}
 }
 
 func broadcast(broadcastChan <-chan string, localListener *net.UDPConn) {
 
-	addr, _ := net.ResolveUDPAddr("udp", BROADCAST_ADDRESS)
+	addr, _ := net.ResolveUDPAddr("udp", broadcastAddress)
 
 	for msg := range broadcastChan {
 		_, err := localListener.WriteToUDP([]byte(msg), addr)
@@ -42,12 +42,10 @@ func broadcast(broadcastChan <-chan string, localListener *net.UDPConn) {
 		if err != nil {
 			log.Println(err)
 		}
-
-		log.Println("Broadcasted:", msg)
 	}
 }
 
-func main() {
+func Init(udpHeartbeat chan string, localIp string) {
 
 	addr, _ := net.ResolveUDPAddr("udp", ":10002")
 
@@ -55,16 +53,14 @@ func main() {
 
 	if err != nil {
 		log.Fatal(err)
-		os.Exit(1)
 	}
 
-	addr, _ = net.ResolveUDPAddr("udp", BROADCAST_ADDRESS)
+	addr, _ = net.ResolveUDPAddr("udp", broadcastAddress)
 
 	broadcastListener, err := net.ListenUDP("udp", addr)
 
 	if err != nil {
 		log.Fatal(err)
-		os.Exit(1)
 	}
 
 	broadcastChan := make(chan string)
@@ -77,10 +73,12 @@ func main() {
 
 	for {
 		select {
-		case <-time.Tick(10 * time.Second):
+		case <-time.Tick(heartBeatInterval * time.Second):
 			broadcastChan <- "Heartbeat"
 		case msg := <-recieveChan:
-			log.Println("Recieved:", msg)
+			if msg != localIp {
+				udpHeartbeat <- msg
+			}
 		}
 	}
 }

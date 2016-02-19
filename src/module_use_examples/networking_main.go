@@ -1,10 +1,9 @@
 package main
 
 import (
-	"log"
+	"../networking"
 )
 
 func main() {
-	//Write examples here
-	log.Println("Example")
+	networking.NetworkLoop()
 }

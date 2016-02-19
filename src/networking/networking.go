@@ -1,13 +1,13 @@
 package networking
 
 import (
+	"./tcp"
+	"./udp"
 	"errors"
 	"log"
 	"net"
-	"os"
 	"strconv"
 	"strings"
-	"tcp"
 )
 
 type connectionStatus int
@@ -22,6 +22,8 @@ func NetworkLoop() {
 
 	localIp, err := getLocalIp()
 
+	log.Println(localIp)
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,41 +33,80 @@ func NetworkLoop() {
 	clients := make(map[string]connectionStatus)
 
 	udpHeartbeat := make(chan string)
-	tcpMsg := make(chan string) //TODO: Bør inneholde ip og melding
+	tcpSendMsg := make(chan string) //TODO: Bør inneholde ip og melding
+	tcpRecvMsg := make(chan string) //TODO: Bør inneholde ip og melding
 	tcpConnected := make(chan string)
 	tcpConnectionFailure := make(chan string)
 	tcpDial := make(chan string)
 
+	go udp.Init(udpHeartbeat, localIp)
+	go tcp.Init(tcpMsg, tcpConnected, tcpConnectionFailure, tcpDial)
+
 	for {
 		select {
-		case remoteIp <- udpHeartbeat:
+		case remoteIp := <-udpHeartbeat:
 			if shouldDial(clients, remoteIp, localIp) {
 				clients[remoteIp] = connecting
 				tcpDial <- remoteIp
 			}
-		case remoteIp <- tcpConnected:
+		case remoteIp := <-tcpConnected:
 			clients[remoteIp] = connected
-		case remoteIp <- tcpConnectionFailure:
+		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
-		case msg <- tcpMsg:
-			//Handle tcp msg here
+		case msg := <-tcpMsg:
 			log.Println("TCP msg:", msg)
 		}
 	}
 }
 
 func shouldDial(clients map[string]connectionStatus, remoteIp string, localIp string) bool {
-	status, ok = clients[remoteIp]
+	status, ok := clients[remoteIp]
 
 	if !ok {
 		clients[remoteIp] = disconnected
+		status = disconnected
 	}
 
-	if clients[remoteIp] == disconnected && hasHighestIp(remoteIp, localIp) {
-		return true
+	if status == disconnected {
+		isHighest, err := hasHighestIp(remoteIp, localIp)
+
+		if err != nil {
+			log.Println(err)
+			return false
+		}
+
+		return isHighest
 	}
 
 	return false
+}
+
+func hasHighestIp(remoteIp string, localIp string) (bool, error) {
+
+	remoteIpInt, err1 := ipToInt(remoteIp)
+
+	if err1 != nil {
+		return false, err1
+	}
+
+	localIpInt, err2 := ipToInt(localIp)
+
+	if err2 != nil {
+		return false, err2
+	}
+
+	return remoteIpInt > localIpInt, nil
+}
+
+func ipToInt(ip string) (int, error) {
+	ipParts := strings.SplitAfter(ip, ".")
+
+	if len(ipParts) != 4 {
+		//TODO: Return string with ip
+		return 0, errors.New("Malformed ip error")
+	}
+
+	return strconv.Atoi(ipParts[3])
 }
 
 func getLocalIp() (string, error) {
@@ -80,37 +121,10 @@ func getLocalIp() (string, error) {
 	for _, address := range addrs {
 		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
+				return ipnet.IP.String(), nil
 			}
 		}
 	}
 
 	return "", errors.New("Could not get local ip")
-}
-
-func hasHighestIp(remoteIp string, localIp string) bool {
-
-	remoteIpInt, err1 := ipToInt(remoteIp)
-
-	if err1 != nil {
-		return 0, err1
-	}
-
-	localIpInt, err2 := ipToInt(localIp)
-
-	if err2 != nil {
-		return 0, err2
-	}
-
-	return remoteIpInt > localIpInt
-}
-
-func ipToInt(ip string) (int, errors) {
-	ipParts := strings.SplitAfter(ip, ".")
-
-	if len(ipParts) != 4 {
-		return 0, errors.New("Malformed ip error")
-	}
-
-	return strconv.Atoi(ipParts[4])
 }

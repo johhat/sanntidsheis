@@ -1,4 +1,4 @@
-package main
+package tcp
 
 //Explanation: http://synflood.at/tmp/golang-slides/mrmcd2012.html
 //Source: https://github.com/akrennmair/telnet-chat/blob/master/03_chat/chat.go
@@ -11,7 +11,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
 	"time"
 )
 
@@ -42,7 +41,7 @@ func (c Client) SendTo(ch <-chan string) {
 	}
 }
 
-func handleMessages(msgchan <-chan string, addchan <-chan Client, rmchan <-chan Client) {
+func handleMessages(msgchan <-chan string, addchan <-chan Client, rmchan <-chan Client, localAddress string, tcpConnected chan string, tcpConnectionFailure chan string) {
 	clients := make(map[net.Conn]chan<- string)
 
 	for {
@@ -55,18 +54,17 @@ func handleMessages(msgchan <-chan string, addchan <-chan Client, rmchan <-chan 
 				}(ch)
 			}
 		case client := <-addchan:
-			//Add client to list
 			clients[client.conn] = client.ch
-			log.Println(clients)
+			tcpConnected <- client.id
 		case client := <-rmchan:
-			//Remove client from list
-			log.Printf("Client disconnects: %s\n", client.id)
+			log.Printf("Disconnected: %s\n", client.id)
 			delete(clients, client.conn)
+			tcpConnectionFailure <- client.id
 		case <-time.Tick(10 * time.Second):
 			//Send heartbeat on TCP
 			for _, ch := range clients {
 				go func(mch chan<- string) {
-					mch <- "\033[1;33;30m" + "Heartbeat from server" + "\033[m\r\n"
+					mch <- "\033[1;33;30m" + "TCP hearbeat from " + localAddress + "\033[m\r\n"
 				}(ch)
 			}
 		}
@@ -90,26 +88,20 @@ func handleConnection(connection net.Conn, msgchan chan<- string, addchan chan<-
 		rmchan <- client
 	}()
 
-	msgchan <- fmt.Sprintf("New user %s has joined the chat room.\n", client.id)
+	msgchan <- fmt.Sprintf("New user %s has connected.\n", client.id)
 
 	// I/O
 	go client.RecieveFrom(msgchan)
 	client.SendTo(client.ch)
 }
 
-func listen() {
+func listen(msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
+
 	listener, err := net.Listen("tcp", ":6000")
 
 	if err != nil {
 		log.Fatal(err)
-		os.Exit(1)
 	}
-
-	msgchan := make(chan string)
-	addchan := make(chan Client)
-	rmchan := make(chan Client)
-
-	go handleMessages(msgchan, addchan, rmchan)
 
 	log.Printf("Listening for TCP connections on %v", listener.Addr())
 
@@ -125,10 +117,35 @@ func listen() {
 	}
 }
 
-func dial() {
+func dial(remoteIp string, msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
+	connection, err := net.DialTCP("tcp", nil, remoteIp)
 
+	for {
+		if err != nil {
+			log.Printf("TCP dial to %s failed", remoteIp)
+			time.Sleep(500 * time.Millisecond)
+		} else {
+			go handleConnection(connection, msgchan, addchan, rmchan)
+			return
+		}
+	}
 }
 
-func Init(tcpMsg, tcpConnected, tcpConnectionFailure, tcpDial chan string) {
+func Init(tcpSendMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial chan string, localAddress string) {
 
+	msgchan := make(chan string)
+	addchan := make(chan Client)
+	rmchan := make(chan Client)
+
+	go handleMessages(msgchan, addchan, rmchan, localAddress, tcpConnected, tcpConnectionFailure)
+	go listen(msgchan, addchan, rmchan)
+
+	for {
+		select {
+		case remoteIp := <-tcpDial:
+			go dial(remoteIp, msgchan, addchan, rmchan)
+		case msg := <-tcpSendMsg:
+			msgchan <- msg
+		}
+	}
 }
