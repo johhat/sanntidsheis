@@ -8,7 +8,8 @@ import (
 
 const (
 	broadcastAddress  = "255.255.255.255:10001"
-	heartBeatInterval = 10
+	listenPort        = ":10002"
+	heartBeatInterval = 10 * time.Second
 )
 
 func recieve(recieveChan chan<- string, broadcastListener *net.UDPConn) {
@@ -47,7 +48,7 @@ func broadcast(broadcastChan <-chan string, localListener *net.UDPConn) {
 
 func Init(udpHeartbeat chan string, localIp string) {
 
-	addr, _ := net.ResolveUDPAddr("udp", ":10002")
+	addr, _ := net.ResolveUDPAddr("udp", listenPort)
 
 	localListener, err := net.ListenUDP("udp", addr)
 
@@ -73,7 +74,7 @@ func Init(udpHeartbeat chan string, localIp string) {
 
 	for {
 		select {
-		case <-time.Tick(heartBeatInterval * time.Second):
+		case <-time.Tick(heartBeatInterval):
 			broadcastChan <- "Heartbeat"
 		case msg := <-recieveChan:
 			if msg != localIp {

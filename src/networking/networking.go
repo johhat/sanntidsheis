@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type connectionStatus int
@@ -22,7 +23,7 @@ func NetworkLoop() {
 
 	localIp, err := getLocalIp()
 
-	log.Println(localIp)
+	log.Println("The ip of this computer is: ", localIp)
 
 	if err != nil {
 		log.Fatal(err)
@@ -40,7 +41,7 @@ func NetworkLoop() {
 	tcpDial := make(chan string)
 
 	go udp.Init(udpHeartbeat, localIp)
-	go tcp.Init(tcpMsg, tcpConnected, tcpConnectionFailure, tcpDial)
+	go tcp.Init(tcpSendMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
 
 	for {
 		select {
@@ -53,13 +54,17 @@ func NetworkLoop() {
 			clients[remoteIp] = connected
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
-		case msg := <-tcpMsg:
+		case msg := <-tcpRecvMsg:
 			log.Println("TCP msg:", msg)
+		case <-time.Tick(10 * time.Second):
+			tcpSendMsg <- "Yo on TCP from ip " + localIp
 		}
+
 	}
 }
 
 func shouldDial(clients map[string]connectionStatus, remoteIp string, localIp string) bool {
+
 	status, ok := clients[remoteIp]
 
 	if !ok {

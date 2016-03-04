@@ -118,7 +118,7 @@ func listen(msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) 
 }
 
 func dial(remoteIp string, msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
-	connection, err := net.DialTCP("tcp", nil, remoteIp)
+	connection, err := net.Dial("tcp", remoteIp)
 
 	for {
 		if err != nil {
