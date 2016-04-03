@@ -3,12 +3,10 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 
 ## Moduler
 - Nettverksmodul
-- Watchdog?
 - Kø/oppførsel (keyword REDUNDANS)
 - Håndtering av input (knapper)
 - Hardware interface (driveren er c-kode)
 - Loggføringsmodul (for å slippe å ha debug-ting i koden)
-- Timer?
 
 ### Samarbeidende heiser
 - Valg av strategi med 1, 2 og 3 heiser i systemet (prinsipielt n heiser)
@@ -16,11 +14,17 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 - Skal heiser fungere uten samarbeid hvis nettverk ikke fungerer?
 
 ### Mulige problem-caser
-- Noen trekker ut en nettverkskabel (og senere plugger den tilbake)
-- Et program kræsjer (bør ikke skje, men må tas hensyn til av de andre heisene), blir tilsvarende om strømmen på en hel arbeidsplass skrus av
-- En heis "står fast" og gjør ikke som programmet ønsker
+- Noen trekker ut en nettverkskabel (og senere plugger den tilbake), ordre legges til mens en heis er koblet fra nettverket
+- Et program kræsjer/henger seg/feiler/gjør rare ting på grunn av en ukjent bug
+- En heis "står fast" og gjør ikke som programmet ønsker (drivsnoren har røket, noen holder igjen heisen med hånda etc.)
+Skal vi da gå inn i en "tilkall service"-modus der heisen permanent deaktiveres til den aktivt reaktiveres? Eller skal den prøve flere ganger
 - Brukeren trykker som en gal på kontrollpanel(ene)
 - Strømmen på en enkelt heis skrus av (og senere på igjen)
+- Strømmen på en hel arbeidsplass skrus av
+- Kosmisk stråling endrer en bit i minnet
+- 
+
+En ordre skal aldri mistes! Dette gjelder også interne ordre (som må tas når den aktuelle heisen kommer tilbake til normal drift).
 
 ## Assumptions
 - At least one elevator is always alive
@@ -29,5 +33,5 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 - No network partitioning
 
 ## Choices
-- When stopping at a flow, all orders are cleared (everyone enters/exits the elevator)
+- When stopping at a floor, all orders are cleared (everyone enters/exits the elevator)
 - What does the elevator do if it cannot connect to the network during initialization? 
