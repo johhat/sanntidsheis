@@ -19,9 +19,10 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 - En heis "står fast" og gjør ikke som programmet ønsker (drivsnoren har røket, noen holder igjen heisen med hånda etc.)
 Skal vi da gå inn i en "tilkall service"-modus der heisen permanent deaktiveres til den aktivt reaktiveres? Eller skal den prøve flere ganger
 - Brukeren trykker som en gal på kontrollpanel(ene)
-- Strømmen på en enkelt heis skrus av (og senere på igjen)
-- Strømmen på en hel arbeidsplass skrus av
+- Strømmen på en enkelt heis skrus av (og senere på igjen), ordre legges til mens dette skjer
+- Strømmen på en hel arbeidsplass skrus av, ordre legges til mens dette skjer
 - Kosmisk stråling endrer en bit i minnet
+- Hvis man bruker harddisker: harddiskkræsj, korrupt fil
 
 En ordre skal aldri mistes! Dette gjelder også interne ordre (som må tas når den aktuelle heisen kommer tilbake til normal drift).
 
