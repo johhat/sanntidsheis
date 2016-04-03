@@ -3,10 +3,10 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 
 ## Moduler
 - Nettverksmodul
-- Kø/oppførsel (keyword REDUNDANS)
-- Håndtering av input (knapper)
-- Hardware interface (driveren er c-kode)
-- Loggføringsmodul (for å slippe å ha debug-ting i koden)
+- Manager
+- Heis
+- Driver
+- Trygg lagring
 
 ### Samarbeidende heiser
 - Valg av strategi med 1, 2 og 3 heiser i systemet (prinsipielt n heiser)
@@ -22,7 +22,6 @@ Skal vi da gå inn i en "tilkall service"-modus der heisen permanent deaktiveres
 - Strømmen på en enkelt heis skrus av (og senere på igjen)
 - Strømmen på en hel arbeidsplass skrus av
 - Kosmisk stråling endrer en bit i minnet
-- 
 
 En ordre skal aldri mistes! Dette gjelder også interne ordre (som må tas når den aktuelle heisen kommer tilbake til normal drift).
 
