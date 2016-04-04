@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+//TODO: close connection correctly
+
 const remoteIp = "localhost:15657"
 
 var connection net.Conn
@@ -102,12 +104,16 @@ func pollButtons(clickEventChan chan ClickEvent) {
 						clickEventChan <- ClickEvent{f, BtnType(btn)}
 					}
 				}
-				fmt.Println("B")
 			}
 
 		}
 		time.Sleep(PollInterval)
 	}
+}
+
+func poll(sensorEventChan chan int, clickEventChan chan ClickEvent) {
+	pollFloorSensor(sensorEventChan)
+	pollButtons(clickEventChan)
 }
 
 func BasicElevator() {
@@ -138,8 +144,6 @@ func hwinit() {
 			time.Sleep(500 * time.Millisecond)
 			conn, err = net.Dial("tcp", remoteIp)
 		} else {
-			fmt.Println("Yeeey no error")
-			//defer connection.Close()
 			break
 		}
 	}
@@ -149,27 +153,19 @@ func hwinit() {
 	setDoorOpenLamp(false)
 	setFloorIndicator(0)
 	clearBtnLamps()
-	//setMotorDirection(MotorDown)
+	setMotorDirection(MotorDown)
 
-	/*for getFloorSensorSignal() == InvalidFloor {
+	for getFloorSensorSignal() == InvalidFloor {
 		//TODO: Add timeout
-	}*/
+	}
 
 	setMotorDirection(MotorStop)
 }
 
 func Init(clickEventChan chan ClickEvent, sensorEventChan chan int) {
 	hwinit()
-	for {
-		log.Println("Set 1")
-		setDoorOpenLamp(true)
-		time.Sleep(1000 * time.Millisecond)
-		log.Println("Set 1")
-		setDoorOpenLamp(false)
-		time.Sleep(1000 * time.Millisecond)
-	}
-	//go pollFloorSensor(sensorEventChan)
-	//go pollButtons(clickEventChan)
+	go poll(sensorEventChan, clickEventChan)
+
 }
 
 func clearBtnLamps() {
@@ -235,18 +231,14 @@ func getFloorSensorSignal() int {
 	}
 
 	buf := make([]byte, 4)
-	fmt.Println("sent")
 
 	_, err = io.ReadFull(connection, buf)
 	if err != nil {
 		log.Fatal("read error:", err)
 	}
-	fmt.Println("recv")
 	if buf[1] == 1 {
-		fmt.Println("ret1")
 		return int(buf[2])
 	} else {
-		fmt.Println("else")
 		return -1
 	}
 }
