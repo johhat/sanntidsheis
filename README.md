@@ -16,8 +16,7 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 ### Mulige problem-caser
 - Noen trekker ut en nettverkskabel (og senere plugger den tilbake), ordre legges til mens en heis er koblet fra nettverket
 - Et program kræsjer/henger seg/feiler/gjør rare ting på grunn av en ukjent bug
-- En heis "står fast" og gjør ikke som programmet ønsker (drivsnoren har røket, noen holder igjen heisen med hånda etc.)
-Skal vi da gå inn i en "tilkall service"-modus der heisen permanent deaktiveres til den aktivt reaktiveres? Eller skal den prøve flere ganger
+- En heis "står fast" og gjør ikke som programmet ønsker (drivsnoren har røket, noen holder igjen heisen med hånda etc.) eller noe flytter heisen med hånda. Skal vi da gå inn i en "tilkall service"-modus der heisen permanent deaktiveres til den aktivt reaktiveres? Eller skal den prøve flere ganger
 - Brukeren trykker som en gal på kontrollpanel(ene)
 - Strømmen på en enkelt heis skrus av (og senere på igjen), ordre legges til mens dette skjer
 - Strømmen på en hel arbeidsplass skrus av, ordre legges til mens dette skjer
