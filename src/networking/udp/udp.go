@@ -9,7 +9,7 @@ import (
 const (
 	broadcastAddress  = "255.255.255.255:10001"
 	listenPort        = ":10002"
-	heartBeatInterval = 10 * time.Second
+	heartBeatInterval = 2 * time.Second
 )
 
 func recieve(recieveChan chan<- string, broadcastListener *net.UDPConn) {

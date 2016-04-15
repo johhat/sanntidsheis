@@ -14,6 +14,10 @@ import (
 	"time"
 )
 
+const (
+	tcpPort = ":6000"
+) 
+
 type Client struct {
 	id   string
 	conn net.Conn
@@ -118,13 +122,15 @@ func listen(msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) 
 }
 
 func dial(remoteIp string, msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
-	connection, err := net.Dial("tcp", remoteIp)
+	connection, err := net.Dial("tcp", remoteIp+":6000")
 
 	for {
 		if err != nil {
-			log.Printf("TCP dial to %s failed", remoteIp)
+			log.Printf("TCP dial to %s failed", remoteIp+":6000")
 			time.Sleep(500 * time.Millisecond)
+			connection, err = net.Dial("tcp", remoteIp+":6000")
 		} else {
+			log.Printf("Wooho TCP connection")
 			go handleConnection(connection, msgchan, addchan, rmchan)
 			return
 		}
