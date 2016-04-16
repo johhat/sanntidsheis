@@ -101,7 +101,7 @@ func handleConnection(connection net.Conn, msgchan chan<- string, addchan chan<-
 
 func listen(msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
 
-	listener, err := net.Listen("tcp", ":6000")
+	listener, err := net.Listen("tcp", "tcpPort")
 
 	if err != nil {
 		log.Fatal(err)
@@ -116,21 +116,21 @@ func listen(msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) 
 			log.Println(err)
 			continue
 		}
-
+		log.Printf("Handling incoming connection from %v", listener.Addr())
 		go handleConnection(connection, msgchan, addchan, rmchan)
 	}
 }
 
 func dial(remoteIp string, msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
-	connection, err := net.Dial("tcp", remoteIp+":6000")
+	connection, err := net.Dial("tcp", remoteIp+tcpPort)
 
 	for {
 		if err != nil {
-			log.Printf("TCP dial to %s failed", remoteIp+":6000")
+			log.Printf("TCP dial to %s failed", remoteIp+tcpPort)
 			time.Sleep(500 * time.Millisecond)
-			connection, err = net.Dial("tcp", remoteIp+":6000")
+			connection, err = net.Dial("tcp", remoteIp+tcpPort)
 		} else {
-			log.Printf("Wooho TCP connection")
+			log.Println("Handling dialed connection to ",remoteIp)
 			go handleConnection(connection, msgchan, addchan, rmchan)
 			return
 		}
@@ -149,6 +149,7 @@ func Init(tcpSendMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial ch
 	for {
 		select {
 		case remoteIp := <-tcpDial:
+			log.Println("Dialing ",remoteIp)
 			go dial(remoteIp, msgchan, addchan, rmchan)
 		case msg := <-tcpSendMsg:
 			msgchan <- msg
