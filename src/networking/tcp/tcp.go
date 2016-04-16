@@ -101,7 +101,7 @@ func handleConnection(connection net.Conn, msgchan chan<- string, addchan chan<-
 
 func listen(msgchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
 
-	listener, err := net.Listen("tcp", "tcpPort")
+	listener, err := net.Listen("tcp", tcpPort)
 
 	if err != nil {
 		log.Fatal(err)
