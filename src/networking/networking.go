@@ -49,7 +49,6 @@ func NetworkLoop() {
 			log.Println("Heartbeat from ",remoteIp)
 			if shouldDial(clients, remoteIp, localIp) {
 				clients[remoteIp] = connecting
-				log.Println("Dialing ",remoteIp)
 				tcpDial <- remoteIp
 			}
 		case remoteIp := <-tcpConnected:
