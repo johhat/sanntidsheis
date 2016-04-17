@@ -1,14 +1,18 @@
 package main
 
 import (
+	"../manager"
 	"log"
-	
 )
 
-func main(){
-	// Start logger
+func main() {
 	// Start driver
+	// Start elevator
 	// Start queue
-	// Start repair thread
+
+	// Start manager
+	// - Input:
+
 	// Start networking
+	// - Output
 }
