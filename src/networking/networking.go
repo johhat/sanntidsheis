@@ -34,8 +34,8 @@ func NetworkLoop() {
 	clients := make(map[string]connectionStatus)
 
 	udpHeartbeat := make(chan string)
-	tcpSendMsg := make(chan string) //TODO: Bør inneholde ip og melding
-	tcpRecvMsg := make(chan string) //TODO: Bør inneholde ip og melding
+	tcpSendMsg := make(chan []byte)
+	tcpRecvMsg := make(chan tcp.RawMessage)
 	tcpConnected := make(chan string)
 	tcpConnectionFailure := make(chan string)
 	tcpDial := make(chan string)

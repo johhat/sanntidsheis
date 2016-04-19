@@ -16,12 +16,18 @@ import (
 
 const (
 	tcpPort = ":6000"
-) 
+)
+
 
 type Client struct {
 	id   string
 	conn net.Conn
 	ch   chan string
+}
+
+type RawMessage struct{
+	data []byte
+	ip string
 }
 
 func (c Client) RecieveFrom(ch chan<- string) {
