@@ -18,33 +18,37 @@ const (
 	tcpPort = ":6000"
 )
 
-
 type Client struct {
 	id   string
 	conn net.Conn
-	ch   chan string
+	ch   chan []byte
 }
 
-type RawMessage struct{
+type RawMessage struct {
 	data []byte
-	ip string
+	ip   string
 }
 
-func (c Client) RecieveFrom(ch chan<- string) {
+func (msg RawMessage) String() string {
+	return fmt.Sprintf("Message from %s: \n %s", msg.ip, string(msg.data))
+}
+
+func (c Client) RecieveFrom(ch chan<- RawMessage) {
 	bufc := bufio.NewReader(c.conn)
 	for {
-		line, err := bufc.ReadString('\n')
+		line, err := bufc.ReadString('\n') //TODO: Erstatt med byte-lesing
 		if err != nil {
-			log.Println(err)
+			log.Println("Connection ", c.id, " error:", err)
 			break
 		}
-		ch <- fmt.Sprintf("%s: %s", c.id, line) //Denne blokkerer frem til en ny melding er mottatt
+		ch <- RawMessage{data: []byte(line), ip: c.id}
 	}
 }
 
-func (c Client) SendTo(ch <-chan string) {
-	for msg := range ch { //Denne loopen trigges hver gang en ny melding kommer inn
-		_, err := io.WriteString(c.conn, msg)
+func (c Client) SendTo(ch <-chan []byte) {
+
+	for msg := range ch {
+		_, err := io.WriteString(c.conn, string(msg)+"\n") //TODO: Erstatt med byte-skriving
 		if err != nil {
 			log.Println(err)
 			return
@@ -52,17 +56,20 @@ func (c Client) SendTo(ch <-chan string) {
 	}
 }
 
-func handleMessages(sendchan <-chan string, addchan <-chan Client, rmchan <-chan Client, localAddress string, tcpConnected chan string, tcpConnectionFailure chan string) {
-	clients := make(map[net.Conn]chan<- string)
+func handleMessages(sendMsg, broadcastMsg <-chan []byte, addchan <-chan Client, rmchan <-chan Client, localAddress string, tcpConnected chan string, tcpConnectionFailure chan string) {
+	clients := make(map[net.Conn]chan<- []byte)
 
 	for {
 		select {
-		case msg := <-sendchan:
+		case msg := <-sendMsg:
+			//TODO: Implement send to one computer
+			log.Print("Send to one computer placeholder. Msg: ", string(msg))
+		case msg := <-broadcastMsg:
 			//Broadcast on TCP
-			for _, ch := range clients {
-				go func(mch chan<- string) {
-					mch <- "\033[1;33;30m" + msg + "\033[m\r\n"
-				}(ch)
+			for _, channel := range clients {
+				go func(messageChannel chan<- []byte) {
+					messageChannel <- msg
+				}(channel)
 			}
 		case client := <-addchan:
 			clients[client.conn] = client.ch
@@ -73,23 +80,24 @@ func handleMessages(sendchan <-chan string, addchan <-chan Client, rmchan <-chan
 			tcpConnectionFailure <- client.id
 		case <-time.Tick(10 * time.Second):
 			//Send heartbeat on TCP
-			for _, ch := range clients {
-				go func(mch chan<- string) {
-					mch <- "\033[1;33;30m" + "TCP hearbeat from " + localAddress + "\033[m\r\n"
-				}(ch)
+			//TODO: Refactor by making broadcast fn.
+			for _, channel := range clients {
+				go func(messageChannel chan<- []byte) {
+					messageChannel <- []byte("TCP heartbeat from " + localAddress)
+				}(channel)
 			}
 		}
 	}
 }
 
-func handleConnection(connection net.Conn, recvchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
+func handleConnection(connection net.Conn, recvchan chan<- RawMessage, addchan chan<- Client, rmchan chan<- Client) {
 
 	defer connection.Close()
 
 	client := Client{
 		id:   connection.RemoteAddr().String(),
 		conn: connection,
-		ch:   make(chan string),
+		ch:   make(chan []byte),
 	}
 
 	addchan <- client
@@ -98,14 +106,13 @@ func handleConnection(connection net.Conn, recvchan chan<- string, addchan chan<
 		log.Printf("Connection from %v closed.\n", connection.RemoteAddr())
 		rmchan <- client
 	}()
-	//msgchan <- fmt.Sprintf("New elevator %s has connected.\n", client.id)
 
 	// I/O
 	go client.RecieveFrom(recvchan)
 	client.SendTo(client.ch)
 }
 
-func listen(recvchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
+func listen(recvchan chan<- RawMessage, addchan chan<- Client, rmchan chan<- Client) {
 
 	listener, err := net.Listen("tcp", tcpPort)
 
@@ -127,33 +134,33 @@ func listen(recvchan chan<- string, addchan chan<- Client, rmchan chan<- Client)
 	}
 }
 
-func dial(remoteIp string, recvchan chan<- string, addchan chan<- Client, rmchan chan<- Client) {
+func dial(remoteIp string, recvchan chan<- RawMessage, addchan chan<- Client, rmchan chan<- Client) {
 	connection, err := net.Dial("tcp", remoteIp+tcpPort)
 
 	for {
 		if err != nil {
 			log.Printf("TCP dial to %s failed", remoteIp+tcpPort)
 			time.Sleep(500 * time.Millisecond)
-			connection, err = net.Dial("tcp", remoteIp+tcpPort) //Annen måte å gjøre dette på?
+			connection, err = net.Dial("tcp", remoteIp+tcpPort) //TODO: Annen måte å gjøre dette på?
 		} else {
-			log.Println("Handling dialed connection to ",remoteIp)
+			log.Println("Handling dialed connection to ", remoteIp)
 			go handleConnection(connection, recvchan, addchan, rmchan)
 			break
 		}
 	}
 }
 
-func Init(tcpSendMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial chan string, localAddress string) {
+func Init(tcpSendMsg, tcpBroadcastMsg chan []byte, tcpRecvMsg chan RawMessage, tcpConnected, tcpConnectionFailure, tcpDial chan string, localAddress string) {
 
 	addchan := make(chan Client)
 	rmchan := make(chan Client)
 
-	go handleMessages(tcpSendMsg, addchan, rmchan, localAddress, tcpConnected, tcpConnectionFailure)
+	go handleMessages(tcpSendMsg, tcpBroadcastMsg, addchan, rmchan, localAddress, tcpConnected, tcpConnectionFailure)
 	go listen(tcpRecvMsg, addchan, rmchan)
 
 	for {
 		remoteIp := <-tcpDial
-		log.Println("Dialing ",remoteIp)
+		log.Println("Dialing ", remoteIp)
 		go dial(remoteIp, tcpRecvMsg, addchan, rmchan)
 	}
 }

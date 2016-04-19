@@ -35,18 +35,31 @@ func NetworkLoop() {
 
 	udpHeartbeat := make(chan string)
 	tcpSendMsg := make(chan []byte)
+	tcpBroadcastMsg := make(chan []byte)
 	tcpRecvMsg := make(chan tcp.RawMessage)
 	tcpConnected := make(chan string)
 	tcpConnectionFailure := make(chan string)
 	tcpDial := make(chan string)
 
 	go udp.Init(udpHeartbeat, localIp)
-	go tcp.Init(tcpSendMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
+	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
+
+	//Denne hinderer av en eller annen merkelig grunn at TCP hearbeats kjører
+	go func() {
+		for {
+			select {
+			case <-time.Tick(5000 * time.Millisecond):
+				log.Println("Tick tick tick from thread")
+				tcpSendMsg <- []byte("Single message yo on TCP from ip " + localIp)
+				//tcpBroadcastMsg <- []byte("Broadcast yo on TCP from ip " + localIp)
+			}
+		}
+	}()
 
 	for {
 		select {
 		case remoteIp := <-udpHeartbeat:
-			log.Println("Heartbeat from ",remoteIp)
+			//log.Println("UDP heartbeat from ", remoteIp)
 			if shouldDial(clients, remoteIp, localIp) {
 				clients[remoteIp] = connecting
 				tcpDial <- remoteIp
@@ -55,12 +68,9 @@ func NetworkLoop() {
 			clients[remoteIp] = connected
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
-		case msg := <-tcpRecvMsg:
-			log.Println("TCP msg:", msg)
-		case <-time.Tick(10 * time.Second):
-			tcpSendMsg <- "Yo on TCP from ip " + localIp
+		case msg := <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
+			log.Println("Incoming TCP msg: \n", msg)
 		}
-
 	}
 }
 
