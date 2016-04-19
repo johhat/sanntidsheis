@@ -7,8 +7,6 @@ import (
 	"../elevator"
 )
 
-var active bool
-
 //Local orders
 //Remote orders 
 //Remote states
@@ -101,18 +99,20 @@ func Run(
 					//Hvis ekstern ordre
 						//Sjekk forventet responstid for alle heiser, velg den beste
 				//Hvis stoppknapp
-					//Hvis ikke aktiv -> bli aktiv
 					//Init på nytt?
+					//Restart heartbeats
+					//Lytt til heartbeats
 			//case sensorEvent:
 			//case assignedOrder:
 				//legg til ordre lokalt
 			//case localOrderFinished:
 			//case localTimeout:
-				// active = false
 				// disconnect TCP eller varsle de andre heisene
 			//case remoteOrderFinished:
 				//Sjekk om mottatt ordreliste samsvarer med gammel-fullført ordre
 				//Oppdater oversikt over den andre heisens ordre
+			//case elevatorMovedWhileDoorsOpen:
+				// samme som localTimeout
 		}
 	}
 }
