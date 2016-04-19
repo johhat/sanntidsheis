@@ -4,6 +4,7 @@ package main
 // travel speed of the elevators at the lab
 
 import (
+	"../elevator"
 	"../simdriver"
 	"fmt"
 	"time"
