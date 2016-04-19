@@ -132,7 +132,7 @@ func BasicElevator() {
 	}
 }
 
-func hwinit() {
+func init() {
 	conn, err := net.Dial("tcp", remoteIp)
 	for {
 		if err != nil {
@@ -160,7 +160,6 @@ func hwinit() {
 }
 
 func Init(clickEventChan chan ClickEvent, sensorEventChan chan int) {
-	hwinit()
 	go poll(sensorEventChan, clickEventChan)
 	time.Sleep(10 * time.Millisecond)
 
