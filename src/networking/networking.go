@@ -44,14 +44,12 @@ func NetworkLoop() {
 	go udp.Init(udpHeartbeat, localIp)
 	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
 
-	//Denne hinderer av en eller annen merkelig grunn at TCP hearbeats kjører
 	go func() {
 		for {
 			select {
 			case <-time.Tick(5000 * time.Millisecond):
-				log.Println("Tick tick tick from thread")
-				tcpSendMsg <- []byte("Single message yo on TCP from ip " + localIp)
-				//tcpBroadcastMsg <- []byte("Broadcast yo on TCP from ip " + localIp)
+				//tcpSendMsg <- []byte("Single message TCP from ip " + localIp)
+				tcpBroadcastMsg <- []byte("Broadcast on TCP from ip " + localIp)
 			}
 		}
 	}()

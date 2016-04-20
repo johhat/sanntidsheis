@@ -6,16 +6,15 @@ package tcp
 //Test fra shell II: nc localhost 6000
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"time"
 )
 
 const (
-	tcpPort = ":6000"
+	tcpPort           = ":6000"
+	heartBeatInterval = 5 * time.Second
 )
 
 type Client struct {
@@ -34,21 +33,25 @@ func (msg RawMessage) String() string {
 }
 
 func (c Client) RecieveFrom(ch chan<- RawMessage) {
-	bufc := bufio.NewReader(c.conn)
+
+	buffer := make([]byte, 1024)
+
 	for {
-		line, err := bufc.ReadString('\n') //TODO: Erstatt med byte-lesing
+		_, err := c.conn.Read(buffer)
 		if err != nil {
 			log.Println("Connection ", c.id, " error:", err)
 			break
 		}
-		ch <- RawMessage{data: []byte(line), ip: c.id}
+		ch <- RawMessage{data: buffer, ip: c.id}
 	}
 }
 
 func (c Client) SendTo(ch <-chan []byte) {
 
 	for msg := range ch {
-		_, err := io.WriteString(c.conn, string(msg)+"\n") //TODO: Erstatt med byte-skriving
+
+		_, err := c.conn.Write(msg)
+
 		if err != nil {
 			log.Println(err)
 			return
@@ -57,7 +60,10 @@ func (c Client) SendTo(ch <-chan []byte) {
 }
 
 func handleMessages(sendMsg, broadcastMsg <-chan []byte, addchan <-chan Client, rmchan <-chan Client, localAddress string, tcpConnected chan string, tcpConnectionFailure chan string) {
+
 	clients := make(map[net.Conn]chan<- []byte)
+
+	tick := time.Tick(heartBeatInterval)
 
 	for {
 		select {
@@ -66,11 +72,7 @@ func handleMessages(sendMsg, broadcastMsg <-chan []byte, addchan <-chan Client, 
 			log.Print("Send to one computer placeholder. Msg: ", string(msg))
 		case msg := <-broadcastMsg:
 			//Broadcast on TCP
-			for _, channel := range clients {
-				go func(messageChannel chan<- []byte) {
-					messageChannel <- msg
-				}(channel)
-			}
+			broadcast(clients, msg)
 		case client := <-addchan:
 			clients[client.conn] = client.ch
 			tcpConnected <- client.id
@@ -78,15 +80,18 @@ func handleMessages(sendMsg, broadcastMsg <-chan []byte, addchan <-chan Client, 
 			log.Printf("Disconnected: %s\n", client.id)
 			delete(clients, client.conn)
 			tcpConnectionFailure <- client.id
-		case <-time.Tick(10 * time.Second):
-			//Send heartbeat on TCP
-			//TODO: Refactor by making broadcast fn.
-			for _, channel := range clients {
-				go func(messageChannel chan<- []byte) {
-					messageChannel <- []byte("TCP heartbeat from " + localAddress)
-				}(channel)
-			}
+		case <-tick:
+			log.Println("Initiating TCP heatbeat")
+			broadcast(clients, []byte("TCP heartbeat from "+localAddress))
 		}
+	}
+}
+
+func broadcast(clients map[net.Conn]chan<- []byte, message []byte) {
+	for _, channel := range clients {
+		go func(messageChannel chan<- []byte) {
+			messageChannel <- message
+		}(channel)
 	}
 }
 
