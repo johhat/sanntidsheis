@@ -2,32 +2,90 @@ package messageInterface
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
+	"log"
 )
 
-//Interface
-
-type Message interface {
-	Encode()
-	Decode()
+//Wrapper to keep type information
+type WrappedMessage struct {
+	Msg     Message
+	MsgType string
 }
 
-func DecodeMessage(encodedMsg []byte) {
+func (wrapped *WrappedMessage) Wrap(message Message) {
+	wrapped.Msg = message
+	wrapped.MsgType = message.Type()
+}
+
+func (wrapped WrappedMessage) Encode() []byte {
+	bytes, _ := json.Marshal(wrapped)
+	return bytes
+}
+
+func (wrapped *WrappedMessage) Decode(data []byte) error {
 
 	tempMap := make(map[string]*json.RawMessage)
 
-	json.Unmarshal(encodedMsg, &tempMap)
+	json.Unmarshal(data, &tempMap)
 
-	for key, value := range tempMap {
-		fmt.Println(key, value)
+	msgTypeJSON, msgTypeOk := tempMap["MsgType"]
+	msgJSON, msgOk := tempMap["Msg"]
+
+	if !msgTypeOk {
+		return errors.New("Missing message type field")
 	}
+
+	if !msgOk {
+		return errors.New("Missing message contents field")
+	}
+
+	var err error
+
+	var msgType string
+	err = json.Unmarshal(*msgTypeJSON, &msgType)
+
+	if err != nil {
+		return err
+	}
+
+	var m Message
+
+	switch msgType {
+	case "MockMessage":
+		temp := MockMessage{}
+		err = json.Unmarshal(*msgJSON, &temp)
+		m = temp
+	case "Hearbeat":
+		temp := Heartbeat{}
+		err = json.Unmarshal(*msgJSON, &temp)
+		m = temp
+	default:
+		log.Println("Error in decode - type field not known")
+		return errors.New("Error in decode - type field not known")
+	}
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	wrapped.Msg = m
+	wrapped.MsgType = m.Type()
+
+	return err
+}
+
+//The actual message interface - all message types must satisfy this interface
+type Message interface {
+	Encode() []byte
+	Type() string
 }
 
 //Mock format
 
 type MockMessage struct {
-	Number int
-	Text   string
+	Number    int
+	Text      string
+	MockState State
 }
 
 func (m MockMessage) Encode() []byte {
@@ -39,8 +97,8 @@ func (m *MockMessage) Decode(data []byte) {
 	json.Unmarshal(data, m)
 }
 
-func (m MockMessage) String() string {
-	return fmt.Sprintf("This mock message has number %v and text %s \n", m.Number, m.Text)
+func (m MockMessage) Type() string {
+	return "MockMessage"
 }
 
 //Heartbeat format
@@ -54,6 +112,13 @@ func (m Heartbeat) Encode() []byte {
 	return bytes
 }
 
-func (m *Heartbeat) Decode(data []byte) {
-	json.Unmarshal(data, m)
+func (m Heartbeat) Type() string {
+	return "Heartbeat"
+}
+
+//Mock struct to see if this will be unmarshalled correctly when it is contained in MockMessage
+type State struct {
+	LastFloor        int
+	CurrentDirection int
+	SomeRandomText   string
 }

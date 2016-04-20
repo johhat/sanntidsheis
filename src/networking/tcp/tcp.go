@@ -5,6 +5,9 @@ package tcp
 //Test fra shell  I: echo -n "Random string" | nc localhost 6000
 //Test fra shell II: nc localhost 6000
 
+//TODO: Legg inn feilhåndtering ved feil i lesing fra tilkobling
+//TODO: Vurder navnsettingen. ip vs. id
+
 import (
 	"bufio"
 	"bytes"
@@ -76,7 +79,7 @@ func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addch
 	for {
 		select {
 		case rawMsg := <-sendMsg:
-			sendToClient(rawMsg.ip, clients, rawMsg.data)
+			sendToId(rawMsg.ip, clients, rawMsg.data)
 		case msg := <-broadcastMsg:
 			broadcast(clients, msg)
 		case client := <-addchan:
