@@ -92,11 +92,12 @@ func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addch
 	}
 }
 
-func sendToClient(ip string, clients map[net.Conn]chan<- []byte, message []byte) {
+func sendToId(id string, clients map[net.Conn]chan<- []byte, message []byte) {
 	//TODO: Må testes
 	for connection, channel := range clients {
-		if connection.RemoteAddr().String() == ip {
+		if connection.RemoteAddr().String() == id {
 			channel <- message
+			break
 		}
 	}
 }
