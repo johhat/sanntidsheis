@@ -29,7 +29,7 @@ type RawMessage struct {
 }
 
 func (msg RawMessage) String() string {
-	return fmt.Sprintf("Message from %s: \n %s", msg.ip, string(msg.data))
+	return fmt.Sprintf("Message from %s: %s", msg.ip, string(msg.data))
 }
 
 func (c Client) RecieveFrom(ch chan<- RawMessage) {
@@ -71,7 +71,6 @@ func handleMessages(sendMsg, broadcastMsg <-chan []byte, addchan <-chan Client, 
 			//TODO: Implement send to one computer
 			log.Print("Send to one computer placeholder. Msg: ", string(msg))
 		case msg := <-broadcastMsg:
-			//Broadcast on TCP
 			broadcast(clients, msg)
 		case client := <-addchan:
 			clients[client.conn] = client.ch
@@ -81,7 +80,6 @@ func handleMessages(sendMsg, broadcastMsg <-chan []byte, addchan <-chan Client, 
 			delete(clients, client.conn)
 			tcpConnectionFailure <- client.id
 		case <-tick:
-			log.Println("Initiating TCP heatbeat")
 			broadcast(clients, []byte("TCP heartbeat from "+localAddress))
 		}
 	}
