@@ -6,6 +6,8 @@ package tcp
 //Test fra shell II: nc localhost 6000
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -34,23 +36,28 @@ func (msg RawMessage) String() string {
 
 func (c Client) RecieveFrom(ch chan<- RawMessage) {
 
-	buffer := make([]byte, 1024)
+	reader := bufio.NewReader(c.conn)
 
 	for {
-		_, err := c.conn.Read(buffer)
+		bytes, err := reader.ReadBytes('\n')
 		if err != nil {
 			log.Println("Connection ", c.id, " error:", err)
 			break
 		}
-		ch <- RawMessage{data: buffer, ip: c.id}
+		ch <- RawMessage{data: bytes, ip: c.id}
 	}
 }
 
 func (c Client) SendTo(ch <-chan []byte) {
 
+	var b bytes.Buffer
+
 	for msg := range ch {
 
-		_, err := c.conn.Write(msg)
+		b.Write(msg)
+		b.Write([]byte("\n"))
+
+		_, err := c.conn.Write(b.Bytes())
 
 		if err != nil {
 			log.Println(err)

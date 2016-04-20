@@ -49,7 +49,10 @@ func NetworkLoop() {
 			select {
 			case <-time.Tick(5000 * time.Millisecond):
 				//tcpSendMsg <- []byte("Single message TCP from ip " + localIp)
-				tcpBroadcastMsg <- []byte("Broadcast on TCP from ip " + localIp)
+				tcpBroadcastMsg <- []byte("Broadcast 1 on TCP from ip " + localIp)
+				tcpBroadcastMsg <- []byte("Broadcast 2 on TCP from ip " + localIp)
+				tcpBroadcastMsg <- []byte("Broadcast 3 on TCP from ip " + localIp)
+				tcpBroadcastMsg <- []byte("Broadcast 4 on TCP from ip " + localIp)
 			}
 		}
 	}()
