@@ -39,8 +39,9 @@ func (c Client) RecieveFrom(ch chan<- RawMessage) {
 	reader := bufio.NewReader(c.conn)
 
 	for {
-		bytes, err := reader.ReadBytes('\n')
+		bytes, err := reader.ReadBytes('\n') //TODO: Bruk av delimiter må testes
 		if err != nil {
+			//TODO: Legg inn kommunikasjon mellom Recv og Send. Bryt begge ved feil.
 			log.Println("Connection ", c.id, " error:", err)
 			break
 		}
@@ -57,7 +58,7 @@ func (c Client) SendTo(ch <-chan []byte) {
 		b.Write(msg)
 		b.Write([]byte("\n"))
 
-		_, err := c.conn.Write(b.Bytes())
+		_, err := c.conn.Write(b.Bytes()) //TODO: Bruk av delimiter må testes
 
 		if err != nil {
 			log.Println(err)
@@ -66,7 +67,7 @@ func (c Client) SendTo(ch <-chan []byte) {
 	}
 }
 
-func handleMessages(sendMsg, broadcastMsg <-chan []byte, addchan <-chan Client, rmchan <-chan Client, localAddress string, tcpConnected chan string, tcpConnectionFailure chan string) {
+func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addchan <-chan Client, rmchan <-chan Client, localAddress string, tcpConnected chan string, tcpConnectionFailure chan string) {
 
 	clients := make(map[net.Conn]chan<- []byte)
 
@@ -74,9 +75,8 @@ func handleMessages(sendMsg, broadcastMsg <-chan []byte, addchan <-chan Client, 
 
 	for {
 		select {
-		case msg := <-sendMsg:
-			//TODO: Implement send to one computer
-			log.Print("Send to one computer placeholder. Msg: ", string(msg))
+		case rawMsg := <-sendMsg:
+			sendToClient(rawMsg.ip, clients, rawMsg.data)
 		case msg := <-broadcastMsg:
 			broadcast(clients, msg)
 		case client := <-addchan:
@@ -88,6 +88,15 @@ func handleMessages(sendMsg, broadcastMsg <-chan []byte, addchan <-chan Client, 
 			tcpConnectionFailure <- client.id
 		case <-tick:
 			broadcast(clients, []byte("TCP heartbeat from "+localAddress))
+		}
+	}
+}
+
+func sendToClient(ip string, clients map[net.Conn]chan<- []byte, message []byte) {
+	//TODO: Må testes
+	for connection, channel := range clients {
+		if connection.RemoteAddr().String() == ip {
+			channel <- message
 		}
 	}
 }
@@ -160,7 +169,7 @@ func dial(remoteIp string, recvchan chan<- RawMessage, addchan chan<- Client, rm
 	}
 }
 
-func Init(tcpSendMsg, tcpBroadcastMsg chan []byte, tcpRecvMsg chan RawMessage, tcpConnected, tcpConnectionFailure, tcpDial chan string, localAddress string) {
+func Init(tcpSendMsg <-chan RawMessage, tcpBroadcastMsg <-chan []byte, tcpRecvMsg chan RawMessage, tcpConnected, tcpConnectionFailure, tcpDial chan string, localAddress string) {
 
 	addchan := make(chan Client)
 	rmchan := make(chan Client)

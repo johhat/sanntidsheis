@@ -34,7 +34,7 @@ func NetworkLoop() {
 	clients := make(map[string]connectionStatus)
 
 	udpHeartbeat := make(chan string)
-	tcpSendMsg := make(chan []byte)
+	tcpSendMsg := make(chan tcp.RawMessage)
 	tcpBroadcastMsg := make(chan []byte)
 	tcpRecvMsg := make(chan tcp.RawMessage)
 	tcpConnected := make(chan string)
@@ -60,7 +60,6 @@ func NetworkLoop() {
 	for {
 		select {
 		case remoteIp := <-udpHeartbeat:
-			//log.Println("UDP heartbeat from ", remoteIp)
 			if shouldDial(clients, remoteIp, localIp) {
 				clients[remoteIp] = connecting
 				tcpDial <- remoteIp
