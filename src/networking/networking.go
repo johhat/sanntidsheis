@@ -51,7 +51,10 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 	go udp.Init(udpBroadcastMsg, udpRecvMsg, localIp)
 	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
 
+	udpHeartbeatNum := 0
 	udpHeatbeatTick := time.Tick(udpHeartbeatInterval)
+
+	tcpHeartbeatnum := 0
 	tcpHeartbeatTick := time.Tick(tcpHeartbeatInterval)
 
 	for {
@@ -81,25 +84,30 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 
 		case remoteIp := <-tcpConnected:
 			clients[remoteIp] = connected
-			log.Println("TCP-connected", clients)
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
-			log.Println("TCP-disconnected", clients)
 		case rawMsg := <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
 			m, err := messages.DecodeWrappedMessage(rawMsg.Data)
 			if err == nil {
-				log.Println("Decoded msg:", m)
+				switch m.(type) {
+				case messages.Heartbeat:
+					//Ignore TCP heartbeats. TODO: Add detection of package losses. Check heartbeatid.
+				default:
+					recvMsgChan <- m
+				}
 			} else {
 				log.Println("Error when decoding msg:", err, string(rawMsg.Data))
 			}
 		case <-tcpHeartbeatTick:
-			m := messages.CreateHeartbeat("TCP")
+			m := messages.CreateHeartbeat(tcpHeartbeatnum)
 			w := messages.WrapMessage(m)
 			tcpBroadcastMsg <- w.Encode()
+			tcpHeartbeatnum++
 		case <-udpHeatbeatTick:
-			m := messages.CreateHeartbeat("UDP")
+			m := messages.CreateHeartbeat(udpHeartbeatNum)
 			w := messages.WrapMessage(m)
 			udpBroadcastMsg <- w.Encode()
+			udpHeartbeatNum++
 		}
 	}
 }

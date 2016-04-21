@@ -25,12 +25,17 @@ func main() {
 
 	go func() {
 		for {
-			<-time.Tick(1000 * time.Second)
-			m.Number = m.Number + 1
+			<-time.Tick(5 * time.Second)
+			m.Number++
 			sendMsgChan <- m
 		}
 
 	}()
 
 	networking.NetworkLoop(sendMsgChan, recvMsgChan)
+
+	for {
+		msg := <-recvMsgChan
+		log.Println("Network main recieved message:", msg)
+	}
 }
