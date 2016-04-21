@@ -20,8 +20,6 @@ func DecodeWrappedMessage(data []byte) (Message, error) {
 
 	var err error
 
-	log.Println(string(data))
-
 	tempMap := make(map[string]*json.RawMessage)
 	err = json.Unmarshal(data, &tempMap)
 
@@ -55,7 +53,7 @@ func DecodeWrappedMessage(data []byte) (Message, error) {
 		err = json.Unmarshal(*msgJSON, &temp)
 		m = temp
 	case "Heartbeat":
-		temp := heartbeat{}
+		temp := Heartbeat{}
 		err = json.Unmarshal(*msgJSON, &temp)
 		m = temp
 	default:
@@ -101,15 +99,15 @@ func (m MockMessage) Type() string {
 }
 
 //Heartbeat format
-func CreateHeartbeat(heartbeatId string) heartbeat {
-	return heartbeat{Code: "MartinOgJohanSinHeis \n EnLinjeTil \n EndaEnLinje", HeartbeatId: heartbeatId}
+func CreateHeartbeat(heartbeatId string) Heartbeat {
+	return Heartbeat{Code: "MartinOgJohanSinHeis", HeartbeatId: heartbeatId}
 }
 
-type heartbeat struct {
+type Heartbeat struct {
 	Code        string
 	HeartbeatId string
 }
 
-func (m heartbeat) Type() string {
+func (m Heartbeat) Type() string {
 	return "Heartbeat"
 }

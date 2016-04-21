@@ -22,7 +22,7 @@ const (
 
 const (
 	udpHeartbeatInterval = 1 * time.Second
-	tcpHeartbeatInterval = 5 * time.Second
+	tcpHeartbeatInterval = 50000 * time.Second
 )
 
 func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- messages.Message) {
@@ -63,15 +63,18 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 			//Check if it is a valid packet
 			m, err := messages.DecodeWrappedMessage(rawMsg.Data)
 
-			if err == nil {
-				log.Println("Decoded udp msg:", m)
-
-				if shouldDial(clients, rawMsg.Ip, localIp) {
-					clients[rawMsg.Ip] = connecting
-					tcpDial <- rawMsg.Ip
-				}
-			} else {
+			if err != nil {
 				log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))
+			} else {
+				switch m.(type) {
+				case messages.Heartbeat:
+					if shouldDial(clients, rawMsg.Ip, localIp) {
+						clients[rawMsg.Ip] = connecting
+						tcpDial <- rawMsg.Ip
+					}
+				default:
+					log.Println("Recieved and decoded non-heartbeat UDP message. Ignoring message.")
+				}
 			}
 
 		case remoteIp := <-tcpConnected:
