@@ -55,8 +55,6 @@ func (c Client) SendTo(ch <-chan []byte) {
 		b.Write(msg)
 		b.Write([]byte("\n"))
 
-		log.Println("TCP send buffer:", b.String())
-
 		_, err := c.conn.Write(b.Bytes()) //TODO: Bruk av delimiter må testes
 
 		if err != nil {

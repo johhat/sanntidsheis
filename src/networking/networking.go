@@ -22,7 +22,7 @@ const (
 
 const (
 	udpHeartbeatInterval = 1 * time.Second
-	tcpHeartbeatInterval = 50000 * time.Second
+	tcpHeartbeatInterval = 5 * time.Second
 )
 
 func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- messages.Message) {
@@ -70,6 +70,8 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 				case messages.Heartbeat:
 					if shouldDial(clients, rawMsg.Ip, localIp) {
 						clients[rawMsg.Ip] = connecting
+						log.Println("TCP-connecting ip", rawMsg.Ip)
+						log.Println("TCP-connecting", clients)
 						tcpDial <- rawMsg.Ip
 					}
 				default:
@@ -79,13 +81,14 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 
 		case remoteIp := <-tcpConnected:
 			clients[remoteIp] = connected
+			log.Println("TCP-connected", clients)
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
+			log.Println("TCP-disconnected", clients)
 		case rawMsg := <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
-			log.Println("-x-x-Incoming TCP msg-x-x-:")
-			m, err := messages.DecodeWrappedMessage(rawMsg.Data)
+			_, err := messages.DecodeWrappedMessage(rawMsg.Data)
 			if err == nil {
-				log.Println("Decoded msg:", m)
+				//log.Println("Decoded msg:", m)
 			} else {
 				log.Println("Error when decoding msg:", err, string(rawMsg.Data))
 			}
