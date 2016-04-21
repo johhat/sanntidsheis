@@ -7,10 +7,14 @@ import (
 	"../elevator"
 )
 
-//Local orders
-//Remote orders 
-//Remote states
-//Local state
+type state struct{
+	last_passed_floor int
+	direction simdriver.MotorDirection
+	orders elevator.Orders
+}
+
+var remoteStates map[string]state
+var localState state
 
 const(
 	stopTime float32 = 3
@@ -39,7 +43,7 @@ func getExpectedResponseTime(targetFloor int, direction direction_t, id networki
 	var bestCaseFloor int
 	var worstCaseFloor int
 	if direction == Up {
-		worstCaseFloor = NumFloors-1
+		worstCaseFloor = simdriver.NumFloors-1
 		bestCaseFloor = currentFloor+1
 	} else {
 		worstCaseFloor = 0
@@ -63,7 +67,7 @@ func getExpectedResponseTime(targetFloor int, direction direction_t, id networki
 	for{
 		if internalQueue[last_passed_floor] || isOrder(last_passed_floor, current_direction){
 			//Clear orders on floor
-			if !orderCleared{
+			if !orderCleared(){
 				wtime += stopTime
 			}
     	} else if isOrderAhead(last_passed_floor, current_direction){ //Ordre framover
@@ -79,7 +83,7 @@ func getExpectedResponseTime(targetFloor int, direction direction_t, id networki
 	if bestCaseTime == 0 || worstCaseTime == 0{
 		//Handle error
 	}
-)
+}
 
 
 func Run(
