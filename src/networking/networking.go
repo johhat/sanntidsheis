@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"./messages"
 	"./tcp"
 	"./udp"
 	"errors"
@@ -8,7 +9,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type connectionStatus int
@@ -19,21 +19,21 @@ const (
 	disconnected
 )
 
-func NetworkLoop() {
+func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- messages.Message) {
 
 	localIp, err := getLocalIp()
 
+	log.Println("---Init network loop---")
 	log.Println("The ip of this computer is: ", localIp)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("Init network loop")
-
 	clients := make(map[string]connectionStatus)
 
 	udpHeartbeat := make(chan string)
+
 	tcpSendMsg := make(chan tcp.RawMessage)
 	tcpBroadcastMsg := make(chan []byte)
 	tcpRecvMsg := make(chan tcp.RawMessage)
@@ -44,21 +44,11 @@ func NetworkLoop() {
 	go udp.Init(udpHeartbeat, localIp)
 	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
 
-	go func() {
-		for {
-			select {
-			case <-time.Tick(5000 * time.Millisecond):
-				//tcpSendMsg <- []byte("Single message TCP from ip " + localIp)
-				tcpBroadcastMsg <- []byte("Broadcast 1 on TCP from ip " + localIp)
-				tcpBroadcastMsg <- []byte("Broadcast 2 on TCP from ip " + localIp)
-				tcpBroadcastMsg <- []byte("Broadcast 3 on TCP from ip " + localIp)
-				tcpBroadcastMsg <- []byte("Broadcast 4 on TCP from ip " + localIp)
-			}
-		}
-	}()
-
 	for {
 		select {
+		case msg := <-sendMsgChan:
+			w := messages.WrapMessage(msg)
+			tcpBroadcastMsg <- w.Encode()
 		case remoteIp := <-udpHeartbeat:
 			if shouldDial(clients, remoteIp, localIp) {
 				clients[remoteIp] = connecting
@@ -68,8 +58,13 @@ func NetworkLoop() {
 			clients[remoteIp] = connected
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
-		case msg := <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
-			log.Println("Incoming TCP msg: \n", msg)
+		case rawMsg := <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
+			log.Println("Incoming TCP msg: \n", string(rawMsg.Data))
+			m, err := messages.DecodeWrappedMessage(rawMsg.Data)
+			log.Println(m)
+			if err != nil {
+				log.Println(err)
+			}
 		}
 	}
 }

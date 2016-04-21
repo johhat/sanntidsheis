@@ -29,12 +29,12 @@ type Client struct {
 }
 
 type RawMessage struct {
-	data []byte
-	ip   string
+	Data []byte
+	Ip   string
 }
 
 func (msg RawMessage) String() string {
-	return fmt.Sprintf("Message from %s: %s", msg.ip, string(msg.data))
+	return fmt.Sprintf("Message from %s: %s", msg.Ip, string(msg.Data))
 }
 
 func (c Client) RecieveFrom(ch chan<- RawMessage) {
@@ -48,7 +48,7 @@ func (c Client) RecieveFrom(ch chan<- RawMessage) {
 			log.Println("Connection ", c.id, " error:", err)
 			break
 		}
-		ch <- RawMessage{data: bytes, ip: c.id}
+		ch <- RawMessage{Data: bytes, Ip: c.id}
 	}
 }
 
@@ -79,7 +79,7 @@ func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addch
 	for {
 		select {
 		case rawMsg := <-sendMsg:
-			sendToId(rawMsg.ip, clients, rawMsg.data)
+			sendToId(rawMsg.Ip, clients, rawMsg.Data)
 		case msg := <-broadcastMsg:
 			broadcast(clients, msg)
 		case client := <-addchan:

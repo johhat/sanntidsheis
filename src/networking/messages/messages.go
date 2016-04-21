@@ -1,4 +1,4 @@
-package messageInterface
+package messages
 
 import (
 	"encoding/json"
@@ -6,37 +6,30 @@ import (
 	"log"
 )
 
-//Wrapper to keep type information
-type WrappedMessage struct {
+type wrappedMessage struct {
 	Msg     Message
 	MsgType string
 }
 
-func (wrapped *WrappedMessage) Wrap(message Message) {
-	wrapped.Msg = message
-	wrapped.MsgType = message.Type()
+func WrapMessage(message Message) wrappedMessage {
+	w := wrappedMessage{Msg: message, MsgType: message.Type()}
+	return w
 }
 
-func (wrapped WrappedMessage) Encode() []byte {
-	bytes, _ := json.Marshal(wrapped)
-	return bytes
-}
-
-func (wrapped *WrappedMessage) Decode(data []byte) error {
+func DecodeWrappedMessage(data []byte) (Message, error) {
 
 	tempMap := make(map[string]*json.RawMessage)
-
 	json.Unmarshal(data, &tempMap)
 
 	msgTypeJSON, msgTypeOk := tempMap["MsgType"]
 	msgJSON, msgOk := tempMap["Msg"]
 
 	if !msgTypeOk {
-		return errors.New("Missing message type field")
+		return nil, errors.New("Missing message type field")
 	}
 
 	if !msgOk {
-		return errors.New("Missing message contents field")
+		return nil, errors.New("Missing message contents field")
 	}
 
 	var err error
@@ -45,7 +38,7 @@ func (wrapped *WrappedMessage) Decode(data []byte) error {
 	err = json.Unmarshal(*msgTypeJSON, &msgType)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var m Message
@@ -61,31 +54,31 @@ func (wrapped *WrappedMessage) Decode(data []byte) error {
 		m = temp
 	default:
 		log.Println("Error in decode - type field not known")
-		return errors.New("Error in decode - type field not known")
+		return nil, errors.New("Error in decode - type field not known")
 	}
 
 	if err != nil {
 		log.Println(err)
 	}
 
-	wrapped.Msg = m
-	wrapped.MsgType = m.Type()
+	return m, err
+}
 
-	return err
+func (wrapped wrappedMessage) Encode() []byte {
+	bytes, _ := json.Marshal(wrapped)
+	return bytes
 }
 
 //The actual message interface - all message types must satisfy this interface
 type Message interface {
-	Encode() []byte
 	Type() string
 }
 
 //Mock format
 
 type MockMessage struct {
-	Number    int
-	Text      string
-	MockState State
+	Number int
+	Text   string
 }
 
 func (m MockMessage) Encode() []byte {
@@ -93,7 +86,7 @@ func (m MockMessage) Encode() []byte {
 	return bytes
 }
 
-func (m *MockMessage) Decode(data []byte) {
+func (m MockMessage) Decode(data []byte) {
 	json.Unmarshal(data, m)
 }
 
@@ -114,11 +107,4 @@ func (m Heartbeat) Encode() []byte {
 
 func (m Heartbeat) Type() string {
 	return "Heartbeat"
-}
-
-//Mock struct to see if this will be unmarshalled correctly when it is contained in MockMessage
-type State struct {
-	LastFloor        int
-	CurrentDirection int
-	SomeRandomText   string
 }

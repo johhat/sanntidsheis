@@ -8,7 +8,7 @@ import (
 func main() {
 	fmt.Println("Wecome to this test")
 
-	s := messageInterface.State{1, 2, "Hello from state struct"}
+	s := messageInterface.State{1, 2, "Hello from state struct. Here comes a new line. And another new line"}
 
 	m := messageInterface.MockMessage{Number: 10, Text: "Hello!", MockState: s}
 	fmt.Println(m)
