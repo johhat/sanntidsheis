@@ -61,22 +61,31 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 			tcpBroadcastMsg <- w.Encode()
 		case rawMsg := <-udpRecvMsg:
 			//Check if it is a valid packet
-			if shouldDial(clients, rawMsg.Ip, localIp) {
-				clients[rawMsg.Ip] = connecting
-				tcpDial <- rawMsg.Ip
+			m, err := messages.DecodeWrappedMessage(rawMsg.Data)
+
+			if err == nil {
+				log.Println("Decoded udp msg:", m)
+
+				if shouldDial(clients, rawMsg.Ip, localIp) {
+					clients[rawMsg.Ip] = connecting
+					tcpDial <- rawMsg.Ip
+				}
+			} else {
+				log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))
 			}
+
 		case remoteIp := <-tcpConnected:
 			clients[remoteIp] = connected
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
-		case rawMsg := <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
-			log.Println("-x-x-Incoming TCP msg-x-x-:")
-			m, err := messages.DecodeWrappedMessage(rawMsg.Data)
-			if err == nil {
-				log.Println("Decoded msg:", m)
-			} else {
-				log.Println("Error when decoding msg:", err, string(rawMsg.Data))
-			}
+		case <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
+			//log.Println("-x-x-Incoming TCP msg-x-x-:")
+			//m, err := messages.DecodeWrappedMessage(rawMsg.Data)
+			//if err == nil {
+			//	log.Println("Decoded msg:", m)
+			//} else {
+			//	log.Println("Error when decoding msg:", err, string(rawMsg.Data))
+			//}
 		case <-tcpHeartbeatTick:
 			m := messages.CreateHeartbeat()
 			w := messages.WrapMessage(m)

@@ -18,8 +18,16 @@ func WrapMessage(message Message) wrappedMessage {
 
 func DecodeWrappedMessage(data []byte) (Message, error) {
 
+	var err error
+
+	log.Println(string(data))
+
 	tempMap := make(map[string]*json.RawMessage)
-	json.Unmarshal(data, &tempMap)
+	err = json.Unmarshal(data, &tempMap)
+
+	if err != nil {
+		return nil, err
+	}
 
 	msgTypeJSON, msgTypeOk := tempMap["MsgType"]
 	msgJSON, msgOk := tempMap["Msg"]
@@ -31,8 +39,6 @@ func DecodeWrappedMessage(data []byte) (Message, error) {
 	if !msgOk {
 		return nil, errors.New("Missing message contents field")
 	}
-
-	var err error
 
 	var msgType string
 	err = json.Unmarshal(*msgTypeJSON, &msgType)
@@ -96,7 +102,7 @@ func (m MockMessage) Type() string {
 
 //Heartbeat format
 func CreateHeartbeat() heartbeat {
-	return heartbeat{Code: "MartinOgJohanSinHeis"}
+	return heartbeat{Code: "MartinOgJohanSinHeis \n EnLinjeTil \n EndaEnLinje"}
 }
 
 type heartbeat struct {

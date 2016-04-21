@@ -1,6 +1,7 @@
 package udp
 
 import (
+	"bytes"
 	"log"
 	"net"
 )
@@ -23,8 +24,9 @@ func recieve(recieveChan chan<- RawMessage, broadcastListener *net.UDPConn) {
 		}
 	}()
 
+	buffer := make([]byte, 1024)
+
 	for {
-		buffer := make([]byte, 1024)
 		n, address, err := broadcastListener.ReadFromUDP(buffer)
 
 		if err != nil || n < 0 {
@@ -32,7 +34,13 @@ func recieve(recieveChan chan<- RawMessage, broadcastListener *net.UDPConn) {
 			panic(err)
 		}
 
-		recieveChan <- RawMessage{Data: buffer, Ip: address.IP.String()}
+		data, err := bytes.NewBuffer(buffer).ReadBytes('\n')
+
+		if err != nil {
+			log.Println("Error when reading UDP message buffer:", err)
+		}
+
+		recieveChan <- RawMessage{Data: data, Ip: address.IP.String()}
 	}
 }
 
@@ -41,7 +49,13 @@ func broadcast(broadcastChan <-chan []byte, localListener *net.UDPConn) {
 	addr, _ := net.ResolveUDPAddr("udp", broadcastAddress)
 
 	for msg := range broadcastChan {
-		_, err := localListener.WriteToUDP(msg, addr)
+
+		var b bytes.Buffer //TODO: Sjekk om denne kan flyttes ut av løkken
+
+		b.Write(msg)
+		b.Write([]byte("\n"))
+
+		_, err := localListener.WriteToUDP(b.Bytes(), addr)
 
 		if err != nil {
 			log.Println(err)
