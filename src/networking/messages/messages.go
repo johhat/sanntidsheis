@@ -101,12 +101,13 @@ func (m MockMessage) Type() string {
 }
 
 //Heartbeat format
-func CreateHeartbeat() heartbeat {
-	return heartbeat{Code: "MartinOgJohanSinHeis \n EnLinjeTil \n EndaEnLinje"}
+func CreateHeartbeat(heartbeatId string) heartbeat {
+	return heartbeat{Code: "MartinOgJohanSinHeis \n EnLinjeTil \n EndaEnLinje", HeartbeatId: heartbeatId}
 }
 
 type heartbeat struct {
-	Code string
+	Code        string
+	HeartbeatId string
 }
 
 func (m heartbeat) Type() string {

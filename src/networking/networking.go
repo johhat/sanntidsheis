@@ -87,11 +87,11 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 			//	log.Println("Error when decoding msg:", err, string(rawMsg.Data))
 			//}
 		case <-tcpHeartbeatTick:
-			m := messages.CreateHeartbeat()
+			m := messages.CreateHeartbeat("TCP")
 			w := messages.WrapMessage(m)
 			tcpBroadcastMsg <- w.Encode()
 		case <-udpHeatbeatTick:
-			m := messages.CreateHeartbeat()
+			m := messages.CreateHeartbeat("UDP")
 			w := messages.WrapMessage(m)
 			udpBroadcastMsg <- w.Encode()
 		}
