@@ -21,6 +21,7 @@ const (
 )
 
 const (
+	udpHeartbeatInterval = 1 * time.Second
 	tcpHeartbeatInterval = 5 * time.Second
 )
 
@@ -37,7 +38,8 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 
 	clients := make(map[string]connectionStatus)
 
-	udpHeartbeat := make(chan string)
+	udpBroadcastMsg := make(chan []byte)
+	udpRecvMsg := make(chan udp.RawMessage)
 
 	tcpSendMsg := make(chan tcp.RawMessage)
 	tcpBroadcastMsg := make(chan []byte)
@@ -46,9 +48,10 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 	tcpConnectionFailure := make(chan string)
 	tcpDial := make(chan string)
 
-	go udp.Init(udpHeartbeat, localIp)
+	go udp.Init(udpBroadcastMsg, udpRecvMsg, localIp)
 	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
 
+	udpHeatbeatTick := time.Tick(udpHeartbeatInterval)
 	tcpHeartbeatTick := time.Tick(tcpHeartbeatInterval)
 
 	for {
@@ -56,26 +59,32 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 		case msg := <-sendMsgChan:
 			w := messages.WrapMessage(msg)
 			tcpBroadcastMsg <- w.Encode()
-		case remoteIp := <-udpHeartbeat:
-			if shouldDial(clients, remoteIp, localIp) {
-				clients[remoteIp] = connecting
-				tcpDial <- remoteIp
+		case rawMsg := <-udpRecvMsg:
+			//Check if it is a valid packet
+			if shouldDial(clients, rawMsg.Ip, localIp) {
+				clients[rawMsg.Ip] = connecting
+				tcpDial <- rawMsg.Ip
 			}
 		case remoteIp := <-tcpConnected:
 			clients[remoteIp] = connected
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
 		case rawMsg := <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
-			log.Println("Incoming TCP msg: \n", string(rawMsg.Data))
+			log.Println("-x-x-Incoming TCP msg-x-x-:")
 			m, err := messages.DecodeWrappedMessage(rawMsg.Data)
-			log.Println("Decoded msg:", m)
-			if err != nil {
-				log.Println(err)
+			if err == nil {
+				log.Println("Decoded msg:", m)
+			} else {
+				log.Println("Error when decoding msg:", err, string(rawMsg.Data))
 			}
 		case <-tcpHeartbeatTick:
 			m := messages.CreateHeartbeat()
 			w := messages.WrapMessage(m)
 			tcpBroadcastMsg <- w.Encode()
+		case <-udpHeatbeatTick:
+			m := messages.CreateHeartbeat()
+			w := messages.WrapMessage(m)
+			udpBroadcastMsg <- w.Encode()
 		}
 	}
 }

@@ -3,16 +3,19 @@ package udp
 import (
 	"log"
 	"net"
-	"time"
 )
 
 const (
-	broadcastAddress  = "255.255.255.255:10001"
-	listenPort        = ":10002"
-	heartBeatInterval = 1 * time.Second
+	broadcastAddress = "255.255.255.255:10001"
+	listenPort       = ":10002"
 )
 
-func recieve(recieveChan chan<- string, broadcastListener *net.UDPConn) {
+type RawMessage struct {
+	Data []byte
+	Ip   string
+}
+
+func recieve(recieveChan chan<- RawMessage, broadcastListener *net.UDPConn) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("Error in UDP recieve: %s \n Closing connection.", r)
@@ -29,16 +32,16 @@ func recieve(recieveChan chan<- string, broadcastListener *net.UDPConn) {
 			panic(err)
 		}
 
-		recieveChan <- address.IP.String()
+		recieveChan <- RawMessage{Data: buffer, Ip: address.IP.String()}
 	}
 }
 
-func broadcast(broadcastChan <-chan string, localListener *net.UDPConn) {
+func broadcast(broadcastChan <-chan []byte, localListener *net.UDPConn) {
 
 	addr, _ := net.ResolveUDPAddr("udp", broadcastAddress)
 
 	for msg := range broadcastChan {
-		_, err := localListener.WriteToUDP([]byte(msg), addr)
+		_, err := localListener.WriteToUDP(msg, addr)
 
 		if err != nil {
 			log.Println(err)
@@ -46,7 +49,7 @@ func broadcast(broadcastChan <-chan string, localListener *net.UDPConn) {
 	}
 }
 
-func Init(udpHeartbeat chan string, localIp string) {
+func Init(udpBroadcastMsg <-chan []byte, udpRecvMsg chan<- RawMessage, localIp string) {
 
 	addr, _ := net.ResolveUDPAddr("udp", listenPort)
 
@@ -64,23 +67,21 @@ func Init(udpHeartbeat chan string, localIp string) {
 		log.Fatal(err)
 	}
 
-	broadcastChan := make(chan string)
+	broadcastChan := make(chan []byte)
 	go broadcast(broadcastChan, localListener)
 
-	recieveChan := make(chan string)
+	recieveChan := make(chan RawMessage)
 	go recieve(recieveChan, broadcastListener)
 
 	log.Println("UDP initialized")
 
-	tick := time.Tick(heartBeatInterval)
-
 	for {
 		select {
-		case <-tick:
-			broadcastChan <- "Heartbeat"
-		case msg := <-recieveChan:
-			if msg != localIp {
-				udpHeartbeat <- msg
+		case msg := <-udpBroadcastMsg:
+			broadcastChan <- msg
+		case rawMsg := <-recieveChan:
+			if rawMsg.Ip != localIp {
+				udpRecvMsg <- rawMsg
 			}
 		}
 	}
