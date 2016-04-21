@@ -32,7 +32,7 @@ func main() {
 
 	}()
 
-	networking.NetworkLoop(sendMsgChan, recvMsgChan)
+	go networking.NetworkLoop(sendMsgChan, recvMsgChan)
 
 	for {
 		msg := <-recvMsgChan
