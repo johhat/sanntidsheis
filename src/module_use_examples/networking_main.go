@@ -25,7 +25,7 @@ func main() {
 
 	go func() {
 		for {
-			<-time.Tick(1 * time.Second)
+			<-time.Tick(1000 * time.Second)
 			m.Number = m.Number + 1
 			sendMsgChan <- m
 		}

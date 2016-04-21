@@ -86,9 +86,9 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 			clients[remoteIp] = disconnected
 			log.Println("TCP-disconnected", clients)
 		case rawMsg := <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
-			_, err := messages.DecodeWrappedMessage(rawMsg.Data)
+			m, err := messages.DecodeWrappedMessage(rawMsg.Data)
 			if err == nil {
-				//log.Println("Decoded msg:", m)
+				log.Println("Decoded msg:", m)
 			} else {
 				log.Println("Error when decoding msg:", err, string(rawMsg.Data))
 			}

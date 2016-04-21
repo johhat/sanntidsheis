@@ -13,11 +13,13 @@ import (
 	"bytes"
 	"log"
 	"net"
+	"strings"
 	"time"
 )
 
 const (
-	tcpPort = ":6000"
+	tcpPort      = ":6000"
+	writeTimeout = 10 * time.Second
 )
 
 type Client struct {
@@ -31,34 +33,40 @@ type RawMessage struct {
 	Ip   string
 }
 
-func (c Client) RecieveFrom(ch chan<- RawMessage) {
+func (c Client) RecieveFrom(ch chan<- RawMessage, closeChan chan<- bool) {
 
 	reader := bufio.NewReader(c.conn)
 
 	for {
-		bytes, err := reader.ReadBytes('\n') //TODO: Bruk av delimiter må testes
+		c.conn.SetReadDeadline(time.Now().Add(writeTimeout))
+
+		bytes, err := reader.ReadBytes('\n')
+
 		if err != nil {
-			//TODO: Legg inn kommunikasjon mellom Recv og Send. Bryt begge ved feil.
-			log.Println("Connection ", c.id, " error:", err)
-			break
+			log.Println("TCP recv error. Connection: ", c.id, " error:", err)
+			closeChan <- true
+			return
 		}
 		ch <- RawMessage{Data: bytes, Ip: c.id}
 	}
 }
 
-func (c Client) SendTo(ch <-chan []byte) {
+func (c Client) SendTo(ch <-chan []byte, closeChan chan<- bool) {
+
+	var b bytes.Buffer
 
 	for msg := range ch {
 
-		//TODO: Sjekk om dette kan gjøres smartere
-		var b bytes.Buffer
 		b.Write(msg)
-		b.Write([]byte("\n"))
+		b.WriteRune('\n')
 
-		_, err := c.conn.Write(b.Bytes()) //TODO: Bruk av delimiter må testes
+		_, err := c.conn.Write(b.Bytes())
+
+		b.Reset()
 
 		if err != nil {
-			log.Println(err)
+			log.Println("TCP send error. Connection: ", c.id, " error:", err)
+			closeChan <- true
 			return
 		}
 	}
@@ -78,7 +86,6 @@ func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addch
 			clients[client.conn] = client.ch
 			tcpConnected <- client.id
 		case client := <-rmchan:
-			log.Printf("Disconnected: %s\n", client.id)
 			delete(clients, client.conn)
 			tcpConnectionFailure <- client.id
 		}
@@ -88,7 +95,7 @@ func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addch
 func sendToId(id string, clients map[net.Conn]chan<- []byte, message []byte) {
 	//TODO: Må testes
 	for connection, channel := range clients {
-		if connection.RemoteAddr().String() == id {
+		if getRemoteIp(connection) == id {
 			channel <- message
 			break
 		}
@@ -108,7 +115,7 @@ func handleConnection(connection net.Conn, recvchan chan<- RawMessage, addchan c
 	defer connection.Close()
 
 	client := Client{
-		id:   connection.RemoteAddr().String(),
+		id:   getRemoteIp(connection),
 		conn: connection,
 		ch:   make(chan []byte),
 	}
@@ -121,8 +128,12 @@ func handleConnection(connection net.Conn, recvchan chan<- RawMessage, addchan c
 	}()
 
 	// I/O
-	go client.RecieveFrom(recvchan)
-	client.SendTo(client.ch)
+	closeChan := make(chan bool)
+
+	go client.RecieveFrom(recvchan, closeChan)
+	go client.SendTo(client.ch, closeChan)
+
+	<-closeChan
 }
 
 func listen(recvchan chan<- RawMessage, addchan chan<- Client, rmchan chan<- Client) {
@@ -161,6 +172,10 @@ func dial(remoteIp string, recvchan chan<- RawMessage, addchan chan<- Client, rm
 			break
 		}
 	}
+}
+
+func getRemoteIp(connection net.Conn) string {
+	return strings.Split(connection.RemoteAddr().String(), ":")[0]
 }
 
 func Init(tcpSendMsg <-chan RawMessage, tcpBroadcastMsg <-chan []byte, tcpRecvMsg chan RawMessage, tcpConnected, tcpConnectionFailure, tcpDial chan string, localAddress string) {

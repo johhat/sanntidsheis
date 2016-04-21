@@ -48,14 +48,15 @@ func broadcast(broadcastChan <-chan []byte, localListener *net.UDPConn) {
 
 	addr, _ := net.ResolveUDPAddr("udp", broadcastAddress)
 
-	for msg := range broadcastChan {
+	var b bytes.Buffer
 
-		//TODO: Sjekk om dette kan gjøres smartere
-		var b bytes.Buffer
+	for msg := range broadcastChan {
 		b.Write(msg)
-		b.Write([]byte("\n"))
+		b.WriteRune('\n')
 
 		_, err := localListener.WriteToUDP(b.Bytes(), addr)
+
+		b.Reset()
 
 		if err != nil {
 			log.Println(err)
