@@ -91,9 +91,10 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 			if err == nil {
 				switch m.(type) {
 				case messages.Heartbeat:
-					//Ignore TCP heartbeats. TODO: Add detection of package losses. Check heartbeatid.
+					log.Println("Got TCP HB:", m)
 				default:
-					recvMsgChan <- m
+					log.Println("Got TCP MSG:", m)
+					//recvMsgChan <- m
 				}
 			} else {
 				log.Println("Error when decoding msg:", err, string(rawMsg.Data))
