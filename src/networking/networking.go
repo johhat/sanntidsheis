@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type connectionStatus int
@@ -19,7 +20,11 @@ const (
 	disconnected
 )
 
-func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- messages.Message) {
+const (
+	tcpHeartbeatInterval = 5 * time.Second
+)
+
+func NetworkLoop(sendMsgChan chan messages.Message, recvMsgChan chan<- messages.Message) {
 
 	localIp, err := getLocalIp()
 
@@ -44,6 +49,8 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 	go udp.Init(udpHeartbeat, localIp)
 	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
 
+	tcpHeartbeatTick := time.Tick(tcpHeartbeatInterval)
+
 	for {
 		select {
 		case msg := <-sendMsgChan:
@@ -61,10 +68,12 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 		case rawMsg := <-tcpRecvMsg: //TODO: Legg inn håndtering av meldinger her
 			log.Println("Incoming TCP msg: \n", string(rawMsg.Data))
 			m, err := messages.DecodeWrappedMessage(rawMsg.Data)
-			log.Println(m)
+			log.Println("Decoded msg:", m)
 			if err != nil {
 				log.Println(err)
 			}
+		case <-tcpHeartbeatTick:
+			sendMsgChan <- messages.CreateHeartbeat()
 		}
 	}
 }

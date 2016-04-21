@@ -11,15 +11,13 @@ package tcp
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"log"
 	"net"
 	"time"
 )
 
 const (
-	tcpPort           = ":6000"
-	heartBeatInterval = 5 * time.Second
+	tcpPort = ":6000"
 )
 
 type Client struct {
@@ -31,10 +29,6 @@ type Client struct {
 type RawMessage struct {
 	Data []byte
 	Ip   string
-}
-
-func (msg RawMessage) String() string {
-	return fmt.Sprintf("Message from %s: %s", msg.Ip, string(msg.Data))
 }
 
 func (c Client) RecieveFrom(ch chan<- RawMessage) {
@@ -74,8 +68,6 @@ func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addch
 
 	clients := make(map[net.Conn]chan<- []byte)
 
-	tick := time.Tick(heartBeatInterval)
-
 	for {
 		select {
 		case rawMsg := <-sendMsg:
@@ -89,8 +81,6 @@ func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addch
 			log.Printf("Disconnected: %s\n", client.id)
 			delete(clients, client.conn)
 			tcpConnectionFailure <- client.id
-		case <-tick:
-			broadcast(clients, []byte("TCP heartbeat from "+localAddress))
 		}
 	}
 }

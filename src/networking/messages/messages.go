@@ -48,8 +48,8 @@ func DecodeWrappedMessage(data []byte) (Message, error) {
 		temp := MockMessage{}
 		err = json.Unmarshal(*msgJSON, &temp)
 		m = temp
-	case "Hearbeat":
-		temp := Heartbeat{}
+	case "Heartbeat":
+		temp := heartbeat{}
 		err = json.Unmarshal(*msgJSON, &temp)
 		m = temp
 	default:
@@ -95,16 +95,14 @@ func (m MockMessage) Type() string {
 }
 
 //Heartbeat format
-
-type Heartbeat struct {
-	Msg string
+func CreateHeartbeat() heartbeat {
+	return heartbeat{Code: "MartinOgJohanSinHeis"}
 }
 
-func (m Heartbeat) Encode() []byte {
-	bytes, _ := json.Marshal(m)
-	return bytes
+type heartbeat struct {
+	Code string
 }
 
-func (m Heartbeat) Type() string {
+func (m heartbeat) Type() string {
 	return "Heartbeat"
 }
