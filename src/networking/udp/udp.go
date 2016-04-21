@@ -50,8 +50,8 @@ func broadcast(broadcastChan <-chan []byte, localListener *net.UDPConn) {
 
 	for msg := range broadcastChan {
 
-		var b bytes.Buffer //TODO: Sjekk om denne kan flyttes ut av løkken
-
+		//TODO: Sjekk om dette kan gjøres smartere
+		var b bytes.Buffer
 		b.Write(msg)
 		b.Write([]byte("\n"))
 

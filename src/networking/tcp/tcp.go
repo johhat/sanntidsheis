@@ -48,12 +48,14 @@ func (c Client) RecieveFrom(ch chan<- RawMessage) {
 
 func (c Client) SendTo(ch <-chan []byte) {
 
-	var b bytes.Buffer
-
 	for msg := range ch {
 
+		//TODO: Sjekk om dette kan gjøres smartere
+		var b bytes.Buffer
 		b.Write(msg)
 		b.Write([]byte("\n"))
+
+		log.Println("TCP send buffer:", b.String())
 
 		_, err := c.conn.Write(b.Bytes()) //TODO: Bruk av delimiter må testes
 
