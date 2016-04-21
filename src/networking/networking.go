@@ -24,7 +24,7 @@ const (
 	tcpHeartbeatInterval = 5 * time.Second
 )
 
-func NetworkLoop(sendMsgChan chan messages.Message, recvMsgChan chan<- messages.Message) {
+func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- messages.Message) {
 
 	localIp, err := getLocalIp()
 
@@ -73,7 +73,9 @@ func NetworkLoop(sendMsgChan chan messages.Message, recvMsgChan chan<- messages.
 				log.Println(err)
 			}
 		case <-tcpHeartbeatTick:
-			sendMsgChan <- messages.CreateHeartbeat()
+			m := messages.CreateHeartbeat()
+			w := messages.WrapMessage(m)
+			tcpBroadcastMsg <- w.Encode()
 		}
 	}
 }
