@@ -6,6 +6,8 @@ import (
 	"log"
 )
 
+const HeartbeatCode = "SecretString"
+
 //
 // Message wrapper used to convert to and from JSON
 //
@@ -158,7 +160,7 @@ func (m MockDirectedMessage) GetRecieverIp() string {
 //
 
 func CreateHeartbeat(heartbeatNum int) Heartbeat {
-	return Heartbeat{Code: "MartinOgJohanSinHeis", HeartbeatNum: heartbeatNum}
+	return Heartbeat{Code: HeartbeatCode, HeartbeatNum: heartbeatNum}
 }
 
 type Heartbeat struct {

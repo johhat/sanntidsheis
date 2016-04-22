@@ -25,7 +25,7 @@ const (
 	tcpHeartbeatInterval = 5 * time.Second
 )
 
-func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- messages.Message) {
+func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- messages.Message, connectedChan, disconnectedChan chan<- string) {
 
 	localIp, err := getLocalIp()
 
@@ -56,26 +56,38 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 	for {
 		select {
 		case msg := <-sendMsgChan:
-			handleTcpSendMsg(msg, tcpSendMsg, tcpBroadcastMsg)
+			handleTcpSendMsg(msg, clients, tcpSendMsg, tcpBroadcastMsg)
 		case rawMsg := <-udpRecvMsg:
 			handleUdpMsgRecv(rawMsg, clients, tcpDial, localIp)
 		case remoteIp := <-tcpConnected:
 			clients[remoteIp] = connected
+			connectedChan <- remoteIp
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
+			disconnectedChan <- remoteIp
 		}
 	}
 }
 
-func handleTcpSendMsg(msg messages.Message, tcpSendMsg chan<- tcp.RawMessage, tcpBroadcastMsg chan<- []byte) {
+func handleTcpSendMsg(msg messages.Message, clients map[string]connectionStatus, tcpSendMsg chan<- tcp.RawMessage, tcpBroadcastMsg chan<- []byte) {
 
 	switch msg.(type) {
 	case messages.DirectedMessage:
 		directedMsg := msg.(messages.DirectedMessage)
+
+		ip := directedMsg.GetRecieverIp()
+
+		status, ok := clients[ip]
+
+		if status != connected || !ok {
+			log.Println("Error in handleTcpSendMsg. Not connected to ip:", ip)
+			return
+		}
+
 		w := messages.WrapMessage(directedMsg)
-		tcpSendMsg <- tcp.RawMessage{Data: w.Encode(), Ip: directedMsg.GetRecieverIp()}
+		tcpSendMsg <- tcp.RawMessage{Data: w.Encode(), Ip: ip}
+
 	case messages.Message:
-		log.Println("This is a broadcast message", msg)
 		w := messages.WrapMessage(msg)
 		tcpBroadcastMsg <- w.Encode()
 	default:
@@ -113,14 +125,14 @@ func udpSendHeartbeats(udpBroadcastMsg chan<- []byte) {
 
 func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- messages.Message) {
 
-	//clientHeartbeatNum := make(map[string]int)
+	heartbeats := make(map[string]int)
 
 	for rawMsg := range tcpRecvMsg {
 		m, err := messages.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 		if err == nil {
 			switch m.(type) {
 			case messages.Heartbeat:
-				//TODO: Add check of HB-num. Detect missing.
+				registerHeartbeat(heartbeats, m.(messages.Heartbeat).HeartbeatNum, rawMsg.Ip)
 			default:
 				recvMsgChan <- m
 			}
@@ -130,10 +142,28 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- message
 	}
 }
 
-func handleUdpMsgRecv(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
+func registerHeartbeat(heartbeats map[string]int, heartbeatNum int, sender string) {
 
-	//TODO: Consider logging heartbeat-number
-	//TODO: Check if heartbeat code is valid
+	prev, ok := heartbeats[sender]
+
+	if !ok {
+		heartbeats[sender] = heartbeatNum
+		return
+	} else {
+		heartbeats[sender] = heartbeatNum
+	}
+
+	switch {
+	case prev > heartbeatNum:
+		log.Printf("Delayed TCP heartbeat from %s. Previous HB: %v Current HB: %v \n", sender, prev, heartbeatNum)
+	case prev == heartbeatNum:
+		log.Printf("Duplicate TCP heartbeat from %s. Previous HB: %v Current HB: %v \n", sender, prev, heartbeatNum)
+	case prev+1 != heartbeatNum:
+		log.Printf("Missing TCP heartbeat(s) from %s. Previous HB: %v Current HB: %v \n", sender, prev, heartbeatNum)
+	}
+}
+
+func handleUdpMsgRecv(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
 
 	m, err := messages.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
@@ -142,11 +172,17 @@ func handleUdpMsgRecv(rawMsg udp.RawMessage, clients map[string]connectionStatus
 	} else {
 		switch m.(type) {
 		case messages.Heartbeat:
+
+			if m.(messages.Heartbeat).Code != messages.HeartbeatCode {
+				log.Printf("Recieved heartbeat with invalid code. Valid code is %s while the heartbeat had code %s. Will not connect to client %s", messages.HeartbeatCode, m.(messages.Heartbeat).Code, rawMsg.Ip)
+				return
+			}
+
 			if shouldDial(clients, rawMsg.Ip, localIp) {
 				clients[rawMsg.Ip] = connecting
-				log.Println("TCP-connecting", clients)
 				tcpDial <- rawMsg.Ip
 			}
+
 		default:
 			log.Println("Recieved and decoded non-heartbeat UDP message. Ignoring message.")
 		}

@@ -25,6 +25,8 @@ func main() {
 
 	sendMsgChan := make(chan messages.Message)
 	recvMsgChan := make(chan messages.Message)
+	connected := make(chan string)
+	disconnected := make(chan string)
 
 	//m := messages.MockMessage{}
 	//m.Number = 0
@@ -33,7 +35,7 @@ func main() {
 	m := messages.MockDirectedMessage{}
 	m.Number = 0
 	m.Text = "Hello from mock directed message!"
-	m.Reciever = "129.241.187.161"
+	m.Reciever = "129.241.187.159"
 
 	go func() {
 		for {
@@ -43,10 +45,16 @@ func main() {
 		}
 	}()
 
-	go networking.NetworkLoop(sendMsgChan, recvMsgChan)
+	go networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected)
 
 	for {
-		msg := <-recvMsgChan
-		log.Println("Network main recieved message:", msg)
+		select {
+		case msg := <-recvMsgChan:
+			log.Println("Network main recieved message:", msg)
+		case ip := <-connected:
+			log.Println("IP connected", ip)
+		case ip := <-disconnected:
+			log.Println("IP disconnected", ip)
+		}
 	}
 }
