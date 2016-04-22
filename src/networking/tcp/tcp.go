@@ -85,13 +85,13 @@ func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addCl
 }
 
 func sendToIp(ip string, clients map[net.Conn]chan<- []byte, message []byte) {
-	//TODO: Må testes
 	for connection, channel := range clients {
 		if getRemoteIp(connection) == ip {
 			channel <- message
-			break
+			return
 		}
 	}
+	log.Println("TCP send to ip failed. No existing connection to ip", ip)
 }
 
 func broadcast(clients map[net.Conn]chan<- []byte, message []byte) {
@@ -119,7 +119,6 @@ func handleConnection(connection net.Conn, recvMsg chan<- RawMessage, addClient 
 		rmClient <- client
 	}()
 
-	// I/O
 	closeConnection := make(chan bool)
 
 	go client.RecieveFrom(recvMsg, closeConnection)
@@ -142,7 +141,7 @@ func listen(recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- 
 		connection, err := listener.Accept()
 
 		if err != nil {
-			log.Println(err)
+			log.Println("Errpr in TCP listener:", err)
 			continue
 		}
 		log.Printf("Handling incoming connection from %v", connection.RemoteAddr())
@@ -156,8 +155,8 @@ func dial(remoteIp string, recvMsg chan<- RawMessage, addClient chan<- client, r
 	for {
 		if err != nil {
 			log.Printf("TCP dial to %s failed", remoteIp+tcpPort)
-			time.Sleep(500 * time.Millisecond)                  //TODO: Avslutte etter et visst antall forsøk? Må i så fall gi beskjed til modul om fail
-			connection, err = net.Dial("tcp", remoteIp+tcpPort) //TODO: Annen måte å gjøre dette på?
+			time.Sleep(500 * time.Millisecond) //TODO: Avslutte etter et visst antall forsøk? Må i så fall gi beskjed til modul om fail
+			connection, err = net.Dial("tcp", remoteIp+tcpPort)
 		} else {
 			log.Println("Handling dialed connection to ", remoteIp)
 			go handleConnection(connection, recvMsg, addClient, rmClient)

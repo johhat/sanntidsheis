@@ -56,8 +56,7 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 	for {
 		select {
 		case msg := <-sendMsgChan:
-			w := messages.WrapMessage(msg)
-			tcpBroadcastMsg <- w.Encode()
+			handleTcpSendMsg(msg, tcpSendMsg, tcpBroadcastMsg)
 		case rawMsg := <-udpRecvMsg:
 			handleUdpMsgRecv(rawMsg, clients, tcpDial, localIp)
 		case remoteIp := <-tcpConnected:
@@ -65,6 +64,22 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
 		}
+	}
+}
+
+func handleTcpSendMsg(msg messages.Message, tcpSendMsg chan<- tcp.RawMessage, tcpBroadcastMsg chan<- []byte) {
+
+	switch msg.(type) {
+	case messages.DirectedMessage:
+		directedMsg := msg.(messages.DirectedMessage)
+		w := messages.WrapMessage(directedMsg)
+		tcpSendMsg <- tcp.RawMessage{Data: w.Encode(), Ip: directedMsg.GetRecieverIp()}
+	case messages.Message:
+		log.Println("This is a broadcast message", msg)
+		w := messages.WrapMessage(msg)
+		tcpBroadcastMsg <- w.Encode()
+	default:
+		log.Println("Error in handleTcpSendMsg: Message does not satisfy any relevant message interface")
 	}
 }
 

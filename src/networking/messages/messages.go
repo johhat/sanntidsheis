@@ -15,9 +15,42 @@ type wrappedMessage struct {
 	MsgType string
 }
 
+func (wrapped wrappedMessage) Encode() []byte {
+	bytes, _ := json.Marshal(wrapped)
+	return bytes
+}
+
 func WrapMessage(message Message) wrappedMessage {
 	w := wrappedMessage{Msg: message, MsgType: message.Type()}
 	return w
+}
+
+func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Message, error) {
+
+	var err error
+	var m Message
+
+	switch msgType {
+	case "MockMessage":
+		temp := MockMessage{}
+		err = json.Unmarshal(*msgJSON, &temp)
+		temp.Sender = senderIp
+		m = temp
+	case "MockDirectedMessage":
+		temp := MockDirectedMessage{}
+		err = json.Unmarshal(*msgJSON, &temp)
+		temp.Sender = senderIp
+		m = temp
+	case "Heartbeat":
+		temp := Heartbeat{}
+		err = json.Unmarshal(*msgJSON, &temp)
+		temp.Sender = senderIp
+		m = temp
+	default:
+		return nil, errors.New("Error in decode - type field not known")
+	}
+
+	return m, err
 }
 
 func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
@@ -32,11 +65,12 @@ func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
 	}
 
 	msgTypeJSON, msgTypeOk := tempMap["MsgType"]
-	msgJSON, msgOk := tempMap["Msg"]
 
 	if !msgTypeOk {
 		return nil, errors.New("Missing message type field")
 	}
+
+	msgJSON, msgOk := tempMap["Msg"]
 
 	if !msgOk {
 		return nil, errors.New("Missing message contents field")
@@ -51,32 +85,13 @@ func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
 
 	var m Message
 
-	switch msgType {
-	case "MockMessage":
-		temp := MockMessage{}
-		temp.Sender = senderIp
-		err = json.Unmarshal(*msgJSON, &temp)
-		m = temp
-	case "Heartbeat":
-		temp := Heartbeat{}
-		temp.Sender = senderIp
-		err = json.Unmarshal(*msgJSON, &temp)
-		m = temp
-	default:
-		log.Println("Error in decode - type field not known")
-		return nil, errors.New("Error in decode - type field not known")
-	}
+	m, err = unmarshallToMessage(msgJSON, msgType, senderIp)
 
 	if err != nil {
 		log.Println(err)
 	}
 
 	return m, err
-}
-
-func (wrapped wrappedMessage) Encode() []byte {
-	bytes, _ := json.Marshal(wrapped)
-	return bytes
 }
 
 //
@@ -94,8 +109,7 @@ type Message interface {
 
 type DirectedMessage interface {
 	GetRecieverIp() string
-	GetSenderIp() string
-	Type() string
+	Message
 }
 
 //
