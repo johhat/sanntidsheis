@@ -40,6 +40,7 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 
 	udpBroadcastMsg := make(chan []byte)
 	udpRecvMsg := make(chan udp.RawMessage)
+	handleUdpMsgRecv := getUdpMsgRecvHandler()
 	go udp.Init(udpBroadcastMsg, udpRecvMsg, localIp)
 	go udpSendHeartbeats(udpBroadcastMsg)
 
@@ -132,7 +133,7 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- message
 		if err == nil {
 			switch m.(type) {
 			case messages.Heartbeat:
-				registerHeartbeat(heartbeats, m.(messages.Heartbeat).HeartbeatNum, rawMsg.Ip)
+				registerHeartbeat(heartbeats, m.(messages.Heartbeat).HeartbeatNum, rawMsg.Ip, "TCP")
 			default:
 				recvMsgChan <- m
 			}
@@ -142,7 +143,7 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- message
 	}
 }
 
-func registerHeartbeat(heartbeats map[string]int, heartbeatNum int, sender string) {
+func registerHeartbeat(heartbeats map[string]int, heartbeatNum int, sender string, connectionType string) {
 
 	prev, ok := heartbeats[sender]
 
@@ -155,36 +156,42 @@ func registerHeartbeat(heartbeats map[string]int, heartbeatNum int, sender strin
 
 	switch {
 	case prev > heartbeatNum:
-		log.Printf("Delayed TCP heartbeat from %s. Previous HB: %v Current HB: %v \n", sender, prev, heartbeatNum)
+		log.Printf("Delayed %s heartbeat from %s. Previous HB: %v Current HB: %v \n", connectionType, sender, prev, heartbeatNum)
 	case prev == heartbeatNum:
-		log.Printf("Duplicate TCP heartbeat from %s. Previous HB: %v Current HB: %v \n", sender, prev, heartbeatNum)
+		log.Printf("Duplicate %s heartbeat from %s. Previous HB: %v Current HB: %v \n", connectionType, sender, prev, heartbeatNum)
 	case prev+1 != heartbeatNum:
-		log.Printf("Missing TCP heartbeat(s) from %s. Previous HB: %v Current HB: %v \n", sender, prev, heartbeatNum)
+		log.Printf("Missing %s heartbeat(s) from %s. Previous HB: %v Current HB: %v \n", connectionType, sender, prev, heartbeatNum)
 	}
 }
 
-func handleUdpMsgRecv(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
+func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
 
-	m, err := messages.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+	heartbeats := make(map[string]int) //Wrapped in closure in place of static variable
 
-	if err != nil {
-		log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))
-	} else {
-		switch m.(type) {
-		case messages.Heartbeat:
+	return func(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
+		m, err := messages.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
-			if m.(messages.Heartbeat).Code != messages.HeartbeatCode {
-				log.Printf("Recieved heartbeat with invalid code. Valid code is %s while the heartbeat had code %s. Will not connect to client %s", messages.HeartbeatCode, m.(messages.Heartbeat).Code, rawMsg.Ip)
-				return
+		if err != nil {
+			log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))
+		} else {
+			switch m.(type) {
+			case messages.Heartbeat:
+
+				if m.(messages.Heartbeat).Code != messages.HeartbeatCode {
+					log.Printf("Recieved heartbeat with invalid code. Valid code is %s while the heartbeat had code %s. Will not connect to client %s", messages.HeartbeatCode, m.(messages.Heartbeat).Code, rawMsg.Ip)
+					return
+				}
+
+				if shouldDial(clients, rawMsg.Ip, localIp) {
+					clients[rawMsg.Ip] = connecting
+					tcpDial <- rawMsg.Ip
+				}
+
+				registerHeartbeat(heartbeats, m.(messages.Heartbeat).HeartbeatNum, rawMsg.Ip, "UDP")
+
+			default:
+				log.Println("Recieved and decoded non-heartbeat UDP message. Ignoring message.")
 			}
-
-			if shouldDial(clients, rawMsg.Ip, localIp) {
-				clients[rawMsg.Ip] = connecting
-				tcpDial <- rawMsg.Ip
-			}
-
-		default:
-			log.Println("Recieved and decoded non-heartbeat UDP message. Ignoring message.")
 		}
 	}
 }
