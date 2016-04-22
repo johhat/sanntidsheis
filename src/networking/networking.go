@@ -101,7 +101,7 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- message
 	//clientHeartbeatNum := make(map[string]int)
 
 	for rawMsg := range tcpRecvMsg {
-		m, err := messages.DecodeWrappedMessage(rawMsg.Data)
+		m, err := messages.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 		if err == nil {
 			switch m.(type) {
 			case messages.Heartbeat:
@@ -120,7 +120,7 @@ func handleUdpMsgRecv(rawMsg udp.RawMessage, clients map[string]connectionStatus
 	//TODO: Consider logging heartbeat-number
 	//TODO: Check if heartbeat code is valid
 
-	m, err := messages.DecodeWrappedMessage(rawMsg.Data)
+	m, err := messages.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
 	if err != nil {
 		log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))

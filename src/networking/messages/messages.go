@@ -6,6 +6,10 @@ import (
 	"log"
 )
 
+//
+// Message wrapper used to convert to and from JSON
+//
+
 type wrappedMessage struct {
 	Msg     Message
 	MsgType string
@@ -16,7 +20,7 @@ func WrapMessage(message Message) wrappedMessage {
 	return w
 }
 
-func DecodeWrappedMessage(data []byte) (Message, error) {
+func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
 
 	var err error
 
@@ -50,10 +54,12 @@ func DecodeWrappedMessage(data []byte) (Message, error) {
 	switch msgType {
 	case "MockMessage":
 		temp := MockMessage{}
+		temp.Sender = senderIp
 		err = json.Unmarshal(*msgJSON, &temp)
 		m = temp
 	case "Heartbeat":
 		temp := Heartbeat{}
+		temp.Sender = senderIp
 		err = json.Unmarshal(*msgJSON, &temp)
 		m = temp
 	default:
@@ -73,32 +79,70 @@ func (wrapped wrappedMessage) Encode() []byte {
 	return bytes
 }
 
-//The actual message interface - all message types must satisfy this interface
+//
+// Broadcast message interfaces
+//
+
 type Message interface {
+	GetSenderIp() string
 	Type() string
 }
 
-//Mock format
+//
+// Directed message interface
+//
+
+type DirectedMessage interface {
+	GetRecieverIp() string
+	GetSenderIp() string
+	Type() string
+}
+
+//
+// Mock broadcast format
+//
 
 type MockMessage struct {
 	Number int
 	Text   string
-}
-
-func (m MockMessage) Encode() []byte {
-	bytes, _ := json.Marshal(m)
-	return bytes
-}
-
-func (m MockMessage) Decode(data []byte) {
-	json.Unmarshal(data, m)
+	Sender string
 }
 
 func (m MockMessage) Type() string {
 	return "MockMessage"
 }
 
-//Heartbeat format
+func (m MockMessage) GetSenderIp() string {
+	return m.Sender
+}
+
+//
+// Mock directed format
+//
+
+type MockDirectedMessage struct {
+	Number   int
+	Text     string
+	Sender   string
+	Reciever string
+}
+
+func (m MockDirectedMessage) Type() string {
+	return "MockDirectedMessage"
+}
+
+func (m MockDirectedMessage) GetSenderIp() string {
+	return m.Sender
+}
+
+func (m MockDirectedMessage) GetRecieverIp() string {
+	return m.Reciever
+}
+
+//
+// Heartbeat format - an actual broadcast format
+//
+
 func CreateHeartbeat(heartbeatNum int) Heartbeat {
 	return Heartbeat{Code: "MartinOgJohanSinHeis", HeartbeatNum: heartbeatNum}
 }
@@ -106,8 +150,13 @@ func CreateHeartbeat(heartbeatNum int) Heartbeat {
 type Heartbeat struct {
 	Code         string
 	HeartbeatNum int
+	Sender       string
 }
 
 func (m Heartbeat) Type() string {
 	return "Heartbeat"
+}
+
+func (m Heartbeat) GetSenderIp() string {
+	return m.Sender
 }
