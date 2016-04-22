@@ -1,12 +1,5 @@
 package tcp
 
-//Explanation: http://synflood.at/tmp/golang-slipes/mrmcd2012.html
-//Source: https://github.com/akrennmair/telnet-chat/blob/master/03_chat/chat.go
-//Test fra shell  I: echo -n "Random string" | nc localhost 6000
-//Test fra shell II: nc localhost 6000
-
-//TODO: Legg inn feilhåndtering ved feil i lesing fra tilkobling
-
 import (
 	"bufio"
 	"bytes"
@@ -174,6 +167,7 @@ func dial(remoteIp string, recvMsg chan<- RawMessage, addClient chan<- client, r
 }
 
 func getRemoteIp(connection net.Conn) string {
+	//TODO: Consider adding error checking here
 	return strings.Split(connection.RemoteAddr().String(), ":")[0]
 }
 
