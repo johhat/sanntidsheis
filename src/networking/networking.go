@@ -249,8 +249,6 @@ func ipToInt(ip string) (int, error) {
 
 func getLocalIp() (string, error) {
 
-	//TODO: Denne er copy paste fra SO. Bør kanskje kontrolleres.
-
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return "", errors.New("Could not get local ip")

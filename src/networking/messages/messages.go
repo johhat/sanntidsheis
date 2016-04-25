@@ -33,13 +33,13 @@ func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Me
 	var m Message
 
 	switch msgType {
-	case "MockMessage":
-		temp := MockMessage{}
+	case "StateChange":
+		temp := StateChange{}
 		err = json.Unmarshal(*msgJSON, &temp)
 		temp.Sender = senderIp
 		m = temp
-	case "MockDirectedMessage":
-		temp := MockDirectedMessage{}
+	case "OrderAssignment":
+		temp := OrderAssignment{}
 		err = json.Unmarshal(*msgJSON, &temp)
 		temp.Sender = senderIp
 		m = temp
@@ -115,48 +115,7 @@ type DirectedMessage interface {
 }
 
 //
-// Mock broadcast format
-//
-
-type MockMessage struct {
-	Number int
-	Text   string
-	Sender string
-}
-
-func (m MockMessage) Type() string {
-	return "MockMessage"
-}
-
-func (m MockMessage) GetSenderIp() string {
-	return m.Sender
-}
-
-//
-// Mock directed format
-//
-
-type MockDirectedMessage struct {
-	Number   int
-	Text     string
-	Sender   string
-	Reciever string
-}
-
-func (m MockDirectedMessage) Type() string {
-	return "MockDirectedMessage"
-}
-
-func (m MockDirectedMessage) GetSenderIp() string {
-	return m.Sender
-}
-
-func (m MockDirectedMessage) GetRecieverIp() string {
-	return m.Reciever
-}
-
-//
-// Heartbeat format - an actual broadcast format
+// Heartbeat format
 //
 
 func CreateHeartbeat(heartbeatNum int) Heartbeat {
@@ -174,5 +133,45 @@ func (m Heartbeat) Type() string {
 }
 
 func (m Heartbeat) GetSenderIp() string {
+	return m.Sender
+}
+
+//
+// Order assignment format
+//
+
+type OrderAssignment struct {
+	Button   simdriver.ClickEvent
+	Assignee string
+	Sender   string
+}
+
+func (oa OrderAssignment) Type() string {
+	return "OrderAssignment"
+}
+
+func (oa OrderAssignment) GetSenderIp() string {
+	return m.Sender
+}
+
+func (oa OrderAssignment) GetRecieverIp() string {
+	return m.Assignee
+}
+
+//
+// State change format
+//
+
+type StateChange struct {
+	NewState manager.State
+	Event    EventType
+	Sender   string
+}
+
+func (sc StateChange) Type() string {
+	return "StateChange"
+}
+
+func (sc StateChange) GetSenderIp() string {
 	return m.Sender
 }
