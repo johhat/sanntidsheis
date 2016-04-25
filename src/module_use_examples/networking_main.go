@@ -18,6 +18,10 @@ import (
 
 //Passordet i begge tilfeller: passord: Sanntid15
 
+//Closed ch returnerer umiddelbart ved recv. Panic ved close.
+//Nil ch blokkerer uendelig, både send og recieve
+//For range stopper når en kanal er stengt
+
 func main() {
 
 	log.Println("--Start of network main file--")

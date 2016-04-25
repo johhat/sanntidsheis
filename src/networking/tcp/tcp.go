@@ -25,6 +25,7 @@ type client struct {
 	ch   chan []byte
 }
 
+//Denne stopper så fort kanalen stenges
 func (c client) RecieveFrom(ch chan<- RawMessage, closeConnection chan<- bool) {
 
 	reader := bufio.NewReader(c.conn)
@@ -36,16 +37,28 @@ func (c client) RecieveFrom(ch chan<- RawMessage, closeConnection chan<- bool) {
 
 		if err != nil {
 			log.Println("TCP recv error. Connection: ", c.ip, " error:", err)
-			closeConnection <- true
+			close(closeConnection)
+			//closeConnection <- true //TODO: Panic, send on closed channel
+			log.Println("Recv from closed. Loop return.")
 			return
 		}
 		ch <- RawMessage{Data: bytes, Ip: c.ip}
 	}
+
+	log.Println("Recv from closed. Tail return.")
 }
 
+//Denne returnerer så fort kanalen stenges
 func (c client) SendTo(ch <-chan []byte, closeConnection chan<- bool) {
 
 	var b bytes.Buffer
+
+	go func() {
+		//Denne trigger en feil som trigger panic ved send til stengt kanal i RecvFrom
+		<-time.After(10 * time.Second)
+		log.Println("Dummy error, closing channel closeconn")
+		close(closeConnection)
+	}()
 
 	for msg := range ch {
 
@@ -58,10 +71,12 @@ func (c client) SendTo(ch <-chan []byte, closeConnection chan<- bool) {
 
 		if err != nil {
 			log.Println("TCP send error. Connection: ", c.ip, " error:", err)
-			closeConnection <- true
+			close(closeConnection)
+			log.Println("Send to closed. Loop return.")
 			return
 		}
 	}
+	log.Println("Send to closed. Tail return.")
 }
 
 func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addClient <-chan client, rmClient <-chan client, localIp string, tcpConnected chan string, tcpConnectionFailure chan string) {
@@ -125,6 +140,8 @@ func handleConnection(connection net.Conn, recvMsg chan<- RawMessage, addClient 
 	go client.SendTo(client.ch, closeConnection)
 
 	<-closeConnection
+	close(closeConnection) //Når denne stenges her, blir det panic i RecvFrom
+	close(client.ch)
 }
 
 func listen(recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- client) {
