@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	tcpPort      = ":6000"
-	writeTimeout = 10 * time.Second
+	tcpPort     = ":6000"
+	readTimeout = 10 * time.Second
 )
 
 type RawMessage struct {
@@ -30,7 +30,7 @@ func (c client) RecieveFrom(ch chan<- RawMessage, closeConnection chan<- bool) {
 	reader := bufio.NewReader(c.conn)
 
 	for {
-		c.conn.SetReadDeadline(time.Now().Add(writeTimeout))
+		c.conn.SetReadDeadline(time.Now().Add(readTimeout))
 
 		bytes, err := reader.ReadBytes('\n')
 
