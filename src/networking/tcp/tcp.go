@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	tcpPort     = ":6000"
-	readTimeout = 10 * time.Second
+	tcpListenPort = ":6000"
+	readTimeout   = 10 * time.Second
 )
 
 type RawMessage struct {
@@ -129,7 +129,7 @@ func handleConnection(connection net.Conn, recvMsg chan<- RawMessage, addClient 
 
 func listen(recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- client) {
 
-	listener, err := net.Listen("tcp", tcpPort)
+	listener, err := net.Listen("tcp", tcpListenPort)
 
 	if err != nil {
 		log.Fatal(err)
@@ -150,13 +150,13 @@ func listen(recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- 
 }
 
 func dial(remoteIp string, recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- client) {
-	connection, err := net.Dial("tcp", remoteIp+tcpPort)
+	connection, err := net.Dial("tcp", remoteIp+tcpListenPort)
 
 	for {
 		if err != nil {
-			log.Printf("TCP dial to %s failed", remoteIp+tcpPort)
+			log.Printf("TCP dial to %s failed", remoteIp+tcpListenPort)
 			time.Sleep(500 * time.Millisecond) //TODO: Avslutte etter et visst antall forsøk? Må i så fall gi beskjed til modul om fail
-			connection, err = net.Dial("tcp", remoteIp+tcpPort)
+			connection, err = net.Dial("tcp", remoteIp+tcpListenPort)
 		} else {
 			log.Println("Handling dialed connection to ", remoteIp)
 			go handleConnection(connection, recvMsg, addClient, rmClient)
