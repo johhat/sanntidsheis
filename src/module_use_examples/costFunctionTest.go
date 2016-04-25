@@ -23,13 +23,13 @@ func main(){
 		simdriver.Down: downOrders,
 		simdriver.Command: CmdOrders}
 	testState := statetype.State{
-		0,
-		elevator.Up,
+		2, // Last passed floor
+		elevator.Up, // Defined direction
 		false, //moving
 		orders,
-		true,
-		0,
-		false}
+		true, //valid
+		0, //Sequence number
+		false} // Door open
 
 	//Create new test order
 	newOrder := simdriver.ClickEvent{3,simdriver.Down}

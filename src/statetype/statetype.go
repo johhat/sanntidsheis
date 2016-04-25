@@ -117,6 +117,7 @@ func (orders Orderset) clearOrders(floor int){
 }
 
 func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (responseTime, bestCaseTime, worstCaseTime float32){
+	fmt.Println("Estimating times for new order on floor",newOrder.Floor,"of type",newOrder.Type)
 	if ((newOrder.Type == simdriver.Up) && (newOrder.Floor == simdriver.NumFloors-1)) || ((newOrder.Type == simdriver.Down) && (newOrder.Floor == 0)){
 		fmt.Println("Attempted to get response time of non-existing order type")
 		responseTime = -1
@@ -149,6 +150,7 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 		worstCaseFloor = 0
 		bestCaseFloor = newOrder.Floor-1
 	}
+	fmt.Println("Best case floor:",bestCaseFloor,"Worst case floor:",worstCaseFloor)
 	
 	//Initialize variables
 	responseTime = 0
@@ -174,6 +176,7 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 
 	for{
 		if currentOrders[simdriver.Command][currentFloor] || currentOrders.isOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection)}){
+			fmt.Println("Stopping at floor",currentFloor)
 			currentOrders.clearOrders(currentFloor)
 			if currentOrders.isOrder(target){
 				switch target.Floor{
@@ -188,14 +191,15 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 				switch target.Floor{
 				case bestCaseFloor:
 					target = simdriver.ClickEvent{worstCaseFloor, simdriver.Command}
+					worstCaseTime += bestCaseTime
 					caseOrders.addOrder(target)
 					currentOrders = caseOrders
+					fmt.Println("Response time:",responseTime,"bestCaseTime",bestCaseTime,"worstCaseTime",worstCaseTime)
 				case worstCaseFloor:
 					return
 				default:
 					target = simdriver.ClickEvent{bestCaseFloor, simdriver.Command}
-					bestCaseTime += responseTime
-					worstCaseTime += responseTime
+					bestCaseTime += responseTime + stopTime
 					caseOrders = currentOrders
 					currentOrders.addOrder(target)
 				}
