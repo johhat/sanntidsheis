@@ -3,6 +3,7 @@ package simdriver
 // Simulator mk. II
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -63,7 +64,7 @@ const (
 	MotorDown
 )
 
-func GetCurrentFloor() int{
+func GetCurrentFloor() int {
 	return state
 }
 
@@ -133,30 +134,38 @@ func BasicElevator() {
 }
 
 func init() {
-	conn, err := net.Dial("tcp", remoteIp)
-	for {
-		if err != nil {
-			log.Printf("TCP dial to %s failed", remoteIp)
-			time.Sleep(500 * time.Millisecond)
-			conn, err = net.Dial("tcp", remoteIp)
-		} else {
-			break
+
+	boolPtr := flag.Bool("dryRun", false, "Use flag dryRun to execute program without init of elevator sim")
+
+	flag.Parse()
+
+	if !*boolPtr {
+		conn, err := net.Dial("tcp", remoteIp)
+		for {
+			if err != nil {
+				log.Printf("TCP dial to %s failed", remoteIp)
+				time.Sleep(500 * time.Millisecond)
+				conn, err = net.Dial("tcp", remoteIp)
+			} else {
+				break
+			}
 		}
+		connection = conn
+
+		SetStopLamp(false)
+		SetDoorOpenLamp(false)
+		clearBtnLamps()
+		SetMotorDirection(MotorDown)
+
+		for GetFloorSensorSignal() == InvalidFloor {
+			time.Sleep(10 * time.Millisecond)
+			//TODO: Add timeout
+		}
+		SetFloorIndicator(GetFloorSensorSignal())
+		SetMotorDirection(MotorStop)
+	} else {
+		log.Println("simdriver not initialized as flag --dryRun is present")
 	}
-	connection = conn
-
-	SetStopLamp(false)
-	SetDoorOpenLamp(false)
-	clearBtnLamps()
-	SetMotorDirection(MotorDown)
-
-	for GetFloorSensorSignal() == InvalidFloor {
-		time.Sleep(10 * time.Millisecond)
-		//TODO: Add timeout
-	}
-	SetFloorIndicator(GetFloorSensorSignal())
-	SetMotorDirection(MotorStop)
-
 }
 
 func Init(clickEventChan chan ClickEvent, sensorEventChan chan int) {
@@ -233,7 +242,7 @@ func GetFloorSensorSignal() int {
 	if err != nil {
 		log.Fatal("read error:", err)
 	}
-	if buf[0] != 7{
+	if buf[0] != 7 {
 		log.Println("Returned floor sensor message is not valid")
 	}
 	if buf[1] == 1 {
