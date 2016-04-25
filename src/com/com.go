@@ -15,6 +15,18 @@ type LiftEvents struct {
 	Obstruction  chan bool
 }
 
+type FloorOrders map[int]bool
+type Orderset map[simdriver.BtnType]FloorOrders
+type State struct{
+	Last_passed_floor int
+	Direction elevator.Direction_t
+	Moving bool
+	Orders Orderset
+	Valid bool
+	SequenceNumber int
+	DoorOpen bool
+}
+
 ///
 /// ---External com---
 ///
