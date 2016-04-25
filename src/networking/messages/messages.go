@@ -101,7 +101,6 @@ func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
 //
 
 type Message interface {
-	GetSenderIp() string
 	Type() string
 }
 
@@ -143,15 +142,10 @@ func (m Heartbeat) GetSenderIp() string {
 type OrderAssignment struct {
 	Button   simdriver.ClickEvent
 	Assignee string
-	Sender   string
 }
 
 func (oa OrderAssignment) Type() string {
 	return "OrderAssignment"
-}
-
-func (oa OrderAssignment) GetSenderIp() string {
-	return m.Sender
 }
 
 func (oa OrderAssignment) GetRecieverIp() string {
