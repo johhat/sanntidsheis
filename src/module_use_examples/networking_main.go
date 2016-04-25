@@ -1,10 +1,9 @@
 package main
 
 import (
+	"../com"
 	"../networking"
-	"../networking/messages"
 	"log"
-	"time"
 )
 
 //Hovedpc på sanntid har ip 129.241.187.158
@@ -23,27 +22,10 @@ func main() {
 
 	log.Println("--Start of network main file--")
 
-	sendMsgChan := make(chan messages.Message)
-	recvMsgChan := make(chan messages.Message)
+	sendMsgChan := make(chan com.Message)
+	recvMsgChan := make(chan com.Message)
 	connected := make(chan string)
 	disconnected := make(chan string)
-
-	//m := messages.MockMessage{}
-	//m.Number = 0
-	//m.Text = "Hello from mock message!"
-
-	m := messages.MockDirectedMessage{}
-	m.Number = 0
-	m.Text = "Hello from mock directed message!"
-	m.Reciever = "129.241.187.159"
-
-	go func() {
-		for {
-			<-time.Tick(5 * time.Second)
-			m.Number++
-			sendMsgChan <- m
-		}
-	}()
 
 	go networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected)
 

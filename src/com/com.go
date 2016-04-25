@@ -1,6 +1,7 @@
 package com
 
 import (
+	"../elevator"
 	"../simdriver"
 	"encoding/json"
 	"errors"
@@ -15,20 +16,25 @@ type LiftEvents struct {
 	Obstruction  chan bool
 }
 
+///
+/// State object definition. This is placed here since it is communicated to other nodes.
+///
+
 type FloorOrders map[int]bool
 type Orderset map[simdriver.BtnType]FloorOrders
-type State struct{
+
+type State struct {
 	Last_passed_floor int
-	Direction elevator.Direction_t
-	Moving bool
-	Orders Orderset
-	Valid bool
-	SequenceNumber int
-	DoorOpen bool
+	Direction         elevator.Direction_t
+	Moving            bool
+	Orders            Orderset
+	Valid             bool
+	SequenceNumber    int
+	DoorOpen          bool
 }
 
 ///
-/// ---External com---
+/// Event com stuff
 ///
 type EventType int
 
@@ -45,28 +51,98 @@ const (
 	LeavingFloor
 )
 
+//
+// Msg interfaces
+//
+
+type Message interface {
+	MsgType() string
+}
+
+type DirectedMessage interface {
+	GetRecieverIp() string
+	Message
+}
+
+//
+// Click Event Msg implementation
+//
+
 type ClickEventMsg struct {
 	Type     EventType
 	Button   simdriver.ClickEvent //Etasje og opp/ned
 	NewState State
+	Sender   string
 }
+
+func (m ClickEventMsg) MsgType() string {
+	return "ClickEventMsg"
+}
+
+//
+// Sensor Event Msg implementation
+//
 
 type SensorEventMsg struct {
 	Type     EventType
 	NewState State
+	Sender   string
 }
+
+func (m SensorEventMsg) MsgType() string {
+	return "SensorEventMsg"
+}
+
+//
+// Initial State Msg implementation
+//
 
 type InitialStateMsg struct {
 	NewState State
+	Sender   string
 }
+
+func (m InitialStateMsg) MsgType() string {
+	return "InitialStateMsg"
+}
+
+//
+// Heartbeat Msg implementation
+//
+
+func CreateHeartbeat(heartbeatNum int) Heartbeat {
+	return Heartbeat{Code: HeartbeatCode, HeartbeatNum: heartbeatNum}
+}
+
+type Heartbeat struct {
+	Code         string
+	HeartbeatNum int
+	Sender       string
+}
+
+func (m Heartbeat) MsgType() string {
+	return "Heartbeat"
+}
+
+//
+// Order Assignment Directed msg implementation
+//
 
 type OrderAssignmentMsg struct {
 	Button   simdriver.ClickEvent
 	Assignee string
 }
 
+func (m OrderAssignmentMsg) MsgType() string {
+	return "OrderAssignmentMsg"
+}
+
+func (m OrderAssignmentMsg) GetRecieverIp() string {
+	return m.Assignee
+}
+
 //
-// Message wrapper used to convert to and from JSON
+// Message wrapper used to convert messages to and from JSON
 //
 
 type wrappedMessage struct {
@@ -80,7 +156,7 @@ func (wrapped wrappedMessage) Encode() []byte {
 }
 
 func WrapMessage(message Message) wrappedMessage {
-	w := wrappedMessage{Msg: message, MsgType: message.Type()}
+	w := wrappedMessage{Msg: message, MsgType: message.MsgType()}
 	return w
 }
 
@@ -90,15 +166,24 @@ func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Me
 	var m Message
 
 	switch msgType {
-	case "StateChange":
-		temp := StateChange{}
+	case "ClickEventMsg":
+		temp := ClickEventMsg{}
+		err = json.Unmarshal(*msgJSON, &temp)
+		temp.Sender = senderIp
+		m = temp
+	case "SensorEventMsg":
+		temp := SensorEventMsg{}
+		err = json.Unmarshal(*msgJSON, &temp)
+		temp.Sender = senderIp
+		m = temp
+	case "InitialStateMsg":
+		temp := InitialStateMsg{}
 		err = json.Unmarshal(*msgJSON, &temp)
 		temp.Sender = senderIp
 		m = temp
 	case "OrderAssignmentMsg":
-		temp := OrderAssignment{}
+		temp := OrderAssignmentMsg{}
 		err = json.Unmarshal(*msgJSON, &temp)
-		temp.Sender = senderIp
 		m = temp
 	case "Heartbeat":
 		temp := Heartbeat{}
@@ -151,69 +236,4 @@ func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
 	}
 
 	return m, err
-}
-
-//
-// Broadcast message interfaces
-//
-
-type Message interface {
-	Type() string
-}
-
-//
-// Directed message interface
-//
-
-type DirectedMessage interface {
-	GetRecieverIp() string
-	Message
-}
-
-//
-// Heartbeat format
-//
-
-func CreateHeartbeat(heartbeatNum int) Heartbeat {
-	return Heartbeat{Code: HeartbeatCode, HeartbeatNum: heartbeatNum}
-}
-
-type Heartbeat struct {
-	Code         string
-	HeartbeatNum int
-	Sender       string
-}
-
-func (m Heartbeat) Type() string {
-	return "Heartbeat"
-}
-
-//
-// Order assignment format
-//
-
-func (oa OrderAssignment) Type() string {
-	return "OrderAssignmentMsg"
-}
-
-func (oa OrderAssignment) GetRecieverIp() string {
-	return m.Assignee
-}
-
-//
-// State change format
-//
-
-type StateChange struct {
-	NewState State
-	Event    EventType
-	Sender   string
-}
-
-func (sc StateChange) Type() string {
-	return "StateChange"
-}
-
-func (sc StateChange) GetSenderIp() string {
-	return m.Sender
 }

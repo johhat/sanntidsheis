@@ -1,7 +1,7 @@
 package networking
 
 import (
-	"./messages"
+	"../com"
 	"./tcp"
 	"./udp"
 	"errors"
@@ -18,20 +18,25 @@ const (
 	connected connectionStatus = iota
 	connecting
 	disconnected
-)
 
-const (
 	udpHeartbeatInterval = 1 * time.Second
 	tcpHeartbeatInterval = 5 * time.Second
 )
 
-func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- messages.Message, connectedChan, disconnectedChan chan<- string) {
+var localIp string
 
-	localIp, err := getLocalIp()
+func init() {
+
+	var err error
+
+	localIp, err = getLocalIp()
 
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func NetworkLoop(sendMsgChan <-chan com.Message, recvMsgChan chan<- com.Message, connectedChan, disconnectedChan chan<- string) {
 
 	log.Println("---Init network loop---")
 	log.Println("The ip of this computer is: ", localIp)
@@ -70,11 +75,11 @@ func NetworkLoop(sendMsgChan <-chan messages.Message, recvMsgChan chan<- message
 	}
 }
 
-func handleTcpSendMsg(msg messages.Message, clients map[string]connectionStatus, tcpSendMsg chan<- tcp.RawMessage, tcpBroadcastMsg chan<- []byte) {
+func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpSendMsg chan<- tcp.RawMessage, tcpBroadcastMsg chan<- []byte) {
 
 	switch msg.(type) {
-	case messages.DirectedMessage:
-		directedMsg := msg.(messages.DirectedMessage)
+	case com.DirectedMessage:
+		directedMsg := msg.(com.DirectedMessage)
 
 		ip := directedMsg.GetRecieverIp()
 
@@ -85,11 +90,11 @@ func handleTcpSendMsg(msg messages.Message, clients map[string]connectionStatus,
 			return
 		}
 
-		w := messages.WrapMessage(directedMsg)
+		w := com.WrapMessage(directedMsg)
 		tcpSendMsg <- tcp.RawMessage{Data: w.Encode(), Ip: ip}
 
-	case messages.Message:
-		w := messages.WrapMessage(msg)
+	case com.Message:
+		w := com.WrapMessage(msg)
 		tcpBroadcastMsg <- w.Encode()
 	default:
 		log.Println("Error in handleTcpSendMsg: Message does not satisfy any relevant message interface")
@@ -103,8 +108,8 @@ func tcpSendHeartbeats(tcpBroadcastMsg chan<- []byte) {
 
 	for {
 		<-tcpHeartbeatTick
-		m := messages.CreateHeartbeat(tcpHeartbeatnum)
-		w := messages.WrapMessage(m)
+		m := com.CreateHeartbeat(tcpHeartbeatnum)
+		w := com.WrapMessage(m)
 		tcpBroadcastMsg <- w.Encode()
 		tcpHeartbeatnum++
 	}
@@ -117,23 +122,23 @@ func udpSendHeartbeats(udpBroadcastMsg chan<- []byte) {
 
 	for {
 		<-udpHeatbeatTick
-		m := messages.CreateHeartbeat(udpHeartbeatNum)
-		w := messages.WrapMessage(m)
+		m := com.CreateHeartbeat(udpHeartbeatNum)
+		w := com.WrapMessage(m)
 		udpBroadcastMsg <- w.Encode()
 		udpHeartbeatNum++
 	}
 }
 
-func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- messages.Message) {
+func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- com.Message) {
 
 	heartbeats := make(map[string]int)
 
 	for rawMsg := range tcpRecvMsg {
-		m, err := messages.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 		if err == nil {
 			switch m.(type) {
-			case messages.Heartbeat:
-				registerHeartbeat(heartbeats, m.(messages.Heartbeat).HeartbeatNum, rawMsg.Ip, "TCP")
+			case com.Heartbeat:
+				registerHeartbeat(heartbeats, m.(com.Heartbeat).HeartbeatNum, rawMsg.Ip, "TCP")
 			default:
 				recvMsgChan <- m
 			}
@@ -169,16 +174,16 @@ func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, clients map[string]conne
 	heartbeats := make(map[string]int) //Wrapped in closure in place of static variable
 
 	return func(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
-		m, err := messages.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
 		if err != nil {
 			log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))
 		} else {
 			switch m.(type) {
-			case messages.Heartbeat:
+			case com.Heartbeat:
 
-				if m.(messages.Heartbeat).Code != messages.HeartbeatCode {
-					log.Printf("Recieved heartbeat with invalid code. Valid code is %s while the heartbeat had code %s. Will not connect to client %s", messages.HeartbeatCode, m.(messages.Heartbeat).Code, rawMsg.Ip)
+				if m.(com.Heartbeat).Code != com.HeartbeatCode {
+					log.Printf("Recieved heartbeat with invalid code. Valid code is %s while the heartbeat had code %s. Will not connect to client %s", com.HeartbeatCode, m.(com.Heartbeat).Code, rawMsg.Ip)
 					return
 				}
 
@@ -187,7 +192,7 @@ func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, clients map[string]conne
 					tcpDial <- rawMsg.Ip
 				}
 
-				registerHeartbeat(heartbeats, m.(messages.Heartbeat).HeartbeatNum, rawMsg.Ip, "UDP")
+				registerHeartbeat(heartbeats, m.(com.Heartbeat).HeartbeatNum, rawMsg.Ip, "UDP")
 
 			default:
 				log.Println("Recieved and decoded non-heartbeat UDP message. Ignoring message.")
@@ -263,4 +268,8 @@ func getLocalIp() (string, error) {
 	}
 
 	return "", errors.New("Could not get local ip")
+}
+
+func GetLocalIp() string {
+	return localIp
 }
