@@ -3,6 +3,7 @@ package com
 import (
 	"../elevator"
 	"../simdriver"
+	"../statetype"
 	"encoding/json"
 	"errors"
 	"log"
@@ -16,22 +17,6 @@ type LiftEvents struct {
 	Obstruction  chan bool
 }
 
-///
-/// State object definition. This is placed here since it is communicated to other nodes.
-///
-
-type FloorOrders map[int]bool
-type Orderset map[simdriver.BtnType]FloorOrders
-
-type State struct {
-	LastPassedFloor int
-	Direction       elevator.Direction_t
-	Moving          bool
-	Orders          Orderset
-	Valid           bool
-	SequenceNumber  int
-	DoorOpen        bool
-}
 
 ///
 /// Event com stuff

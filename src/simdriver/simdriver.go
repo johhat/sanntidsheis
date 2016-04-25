@@ -133,7 +133,7 @@ func BasicElevator() {
 	}
 }
 
-func init() {
+func Xinit() {
 
 	boolPtr := flag.Bool("dryRun", false, "Use flag dryRun to execute program without init of elevator sim")
 
