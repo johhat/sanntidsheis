@@ -23,8 +23,8 @@ type State struct {
 
 const(
 	stopTime float32 = 3
-	floorTravelTime float32 = 2
-	floorPassingTime float32 = 0.5
+	floorTravelTime float32 = 2//2.2+floorPassingTime
+	floorPassingTime float32 = 0.385
 	movingPenalty float32 = floorTravelTime/2
 	doorOpenPenalty float32 = stopTime/2
 )
@@ -172,35 +172,43 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 		responseTime += doorOpenPenalty
 	}
 	target := newOrder
-	var caseOrders Orderset
+	caseOrders := make(Orderset)
+	caseOrders[simdriver.Down] = make(FloorOrders)
+	caseOrders[simdriver.Up] = make(FloorOrders)
+	caseOrders[simdriver.Command] = make(FloorOrders)
 
 	for{
 		if currentOrders[simdriver.Command][currentFloor] || currentOrders.isOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection)}){
-			fmt.Println("Stopping at floor",currentFloor)
+			//fmt.Println("Stopping at floor",currentFloor)
 			currentOrders.clearOrders(currentFloor)
 			if currentOrders.isOrder(target){
 				switch target.Floor{
 				case bestCaseFloor:
 					bestCaseTime += stopTime
+					//fmt.Println("Stop: Bestcasetime + 3")
 				case worstCaseFloor:
 					worstCaseTime += stopTime
+					//fmt.Println("Stop: Worstcasetime + 3")
 				default:
 					responseTime += stopTime
+					//fmt.Println("Stop: Responsetime + 3")
 				}
 			} else {
 				switch target.Floor{
 				case bestCaseFloor:
 					target = simdriver.ClickEvent{worstCaseFloor, simdriver.Command}
-					worstCaseTime += bestCaseTime
+					worstCaseTime += responseTime + stopTime
+					//fmt.Println("Worstcasetime + responsetime + 3")
 					caseOrders.addOrder(target)
-					currentOrders = caseOrders
-					fmt.Println("Response time:",responseTime,"bestCaseTime",bestCaseTime,"worstCaseTime",worstCaseTime)
+					deepOrdersetCopy(caseOrders,currentOrders)
+					currentFloor = newOrder.Floor
 				case worstCaseFloor:
 					return
 				default:
 					target = simdriver.ClickEvent{bestCaseFloor, simdriver.Command}
 					bestCaseTime += responseTime + stopTime
-					caseOrders = currentOrders
+					//fmt.Println("Bestcasetime + responsetime + 3")
+					deepOrdersetCopy(currentOrders,caseOrders)
 					currentOrders.addOrder(target)
 				}
 			}
@@ -208,27 +216,31 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
     		switch target.Floor{
 			case bestCaseFloor:
 				bestCaseTime += floorTravelTime
+				//fmt.Println("Move: Bestcasetime + 2")
 			case worstCaseFloor:
 				worstCaseTime += floorTravelTime
+				//fmt.Println("Move: Worstcasetime + 2")
 			default:
 				responseTime += floorTravelTime
+				//fmt.Println("Move: Responsetime + 2")
 			}
     		if currentDirection == elevator.Up{
     			currentFloor += 1
+    			//fmt.Println("Going up to",currentFloor)
     		} else {
     			currentFloor -= 1
+    			//fmt.Println("Going down to",currentFloor)
     		}
     	} else if currentOrders.isOrderBehind(currentFloor, currentDirection) || currentOrders.isOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection.OppositeDirection())}){ //Ordre bakover
     		currentDirection = currentDirection.OppositeDirection()
+    		//fmt.Println("Turning around")
     	} else {
     		//No orders left, to prevent erronous infinite loop this must be catched
-    		fmt.Println("Stuck forever ...")
+    		//fmt.Println("Stuck forever ...")
     	}
 	}
 
-	if bestCaseTime == 0 || worstCaseTime == 0{
-		fmt.Println("getResponse time calculated invalid best case or worst case time")
-	}
+	fmt.Println("Time estimator escaped for loop in invalid way")
 	return
 }
 
@@ -238,5 +250,12 @@ func elevDirToDriverDir(dir elevator.Direction_t) simdriver.BtnType {
 	} else {
 		return simdriver.Down
 	}
-	
+}
+
+func deepOrdersetCopy(from Orderset, to Orderset) {
+	for btn,floorOrders := range from{
+		for floor, isSet := range floorOrders{
+			to[btn][floor] = isSet
+		}
+	}
 }

@@ -11,21 +11,26 @@ import(
 	floorTravelTime float32 = 2
 	movingPenalty float32 = floorTravelTime/2
 	doorOpenPenalty float32 = stopTime/2
+
+	From testing at the lab:
+	Travel between floors: 2.2
+	Passing floor: 0.385
+
 */
 
 func main(){
 	//Create test state
-	upOrders := statetype.FloorOrders{0: false, 1: false, 2: false}
-	downOrders := statetype.FloorOrders{1: false, 2: false, 3: false}
+	upOrders := statetype.FloorOrders{0:false , 1: false, 2: false}
+	downOrders := statetype.FloorOrders{1: false, 2: true, 3: false}
 	CmdOrders := statetype.FloorOrders{0: false, 1: false, 2: false, 3: false}
 	orders := statetype.Orderset{
 		simdriver.Up: upOrders,
 		simdriver.Down: downOrders,
 		simdriver.Command: CmdOrders}
 	testState := statetype.State{
-		2, // Last passed floor
-		elevator.Up, // Defined direction
-		false, //moving
+		3, // Last passed floor
+		elevator.Down, // Defined direction
+		true, //moving
 		orders,
 		true, //valid
 		0, //Sequence number
