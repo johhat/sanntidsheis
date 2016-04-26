@@ -211,7 +211,7 @@ func shouldDial(clients map[string]connectionStatus, remoteIp string, localIp st
 	}
 
 	if status == disconnected {
-		isHighest, err := hasHighestIp(remoteIp, localIp)
+		isHighest, err := HasHighestIp(remoteIp, localIp)
 
 		if err != nil {
 			log.Println(err)
@@ -224,7 +224,7 @@ func shouldDial(clients map[string]connectionStatus, remoteIp string, localIp st
 	return false
 }
 
-func hasHighestIp(remoteIp string, localIp string) (bool, error) {
+func HasHighestIp(remoteIp string, localIp string) (bool, error) {
 
 	remoteIpInt, err1 := ipToInt(remoteIp)
 
