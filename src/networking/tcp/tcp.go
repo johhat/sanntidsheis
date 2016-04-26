@@ -25,8 +25,7 @@ type client struct {
 	ch   chan []byte
 }
 
-//Denne stopper så fort kanalen stenges
-func (c client) RecieveFrom(ch chan<- RawMessage, closeConnection chan<- bool) {
+func (c client) RecieveFrom(ch chan<- RawMessage, sigRecvErr chan<- bool) {
 
 	reader := bufio.NewReader(c.conn)
 
@@ -37,30 +36,18 @@ func (c client) RecieveFrom(ch chan<- RawMessage, closeConnection chan<- bool) {
 
 		if err != nil {
 			log.Println("TCP recv error. Connection: ", c.ip, " error:", err)
-			close(closeConnection)
-			//closeConnection <- true //TODO: Panic, send on closed channel
-			log.Println("Recv from closed. Loop return.")
+			sigRecvErr <- true
 			return
 		}
 		ch <- RawMessage{Data: bytes, Ip: c.ip}
 	}
-
-	log.Println("Recv from closed. Tail return.")
 }
 
-//Denne returnerer så fort kanalen stenges
-func (c client) SendTo(ch <-chan []byte, closeConnection chan<- bool) {
+func (c *client) SendTo(sigSendErr chan<- bool) {
 
 	var b bytes.Buffer
 
-	go func() {
-		//Denne trigger en feil som trigger panic ved send til stengt kanal i RecvFrom
-		<-time.After(10 * time.Second)
-		log.Println("Dummy error, closing channel closeconn")
-		close(closeConnection)
-	}()
-
-	for msg := range ch {
+	for msg := range c.ch {
 
 		b.Write(msg)
 		b.WriteRune('\n')
@@ -71,15 +58,19 @@ func (c client) SendTo(ch <-chan []byte, closeConnection chan<- bool) {
 
 		if err != nil {
 			log.Println("TCP send error. Connection: ", c.ip, " error:", err)
-			close(closeConnection)
-			log.Println("Send to closed. Loop return.")
+			sigSendErr <- true
 			return
 		}
 	}
-	log.Println("Send to closed. Tail return.")
 }
 
-func handleMessages(sendMsg <-chan RawMessage, broadcastMsg <-chan []byte, addClient <-chan client, rmClient <-chan client, localIp string, tcpConnected chan string, tcpConnectionFailure chan string) {
+func handleMessages(sendMsg <-chan RawMessage,
+	broadcastMsg <-chan []byte,
+	addClient <-chan client,
+	rmClient <-chan client,
+	localIp string,
+	tcpConnected chan<- string,
+	tcpConnectionFailure chan<- string) {
 
 	clients := make(map[net.Conn]chan<- []byte)
 
@@ -119,8 +110,6 @@ func broadcast(clients map[net.Conn]chan<- []byte, message []byte) {
 
 func handleConnection(connection net.Conn, recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- client) {
 
-	defer connection.Close()
-
 	client := client{
 		ip:   getRemoteIp(connection),
 		conn: connection,
@@ -134,13 +123,21 @@ func handleConnection(connection net.Conn, recvMsg chan<- RawMessage, addClient 
 		rmClient <- client
 	}()
 
-	closeConnection := make(chan bool)
+	sigRecvErr := make(chan bool)
+	sigSendErr := make(chan bool)
 
-	go client.RecieveFrom(recvMsg, closeConnection)
-	go client.SendTo(client.ch, closeConnection)
+	go client.RecieveFrom(recvMsg, sigRecvErr)
+	go client.SendTo(sigSendErr)
 
-	<-closeConnection
-	close(closeConnection) //Når denne stenges her, blir det panic i RecvFrom
+	select {
+	case <-sigRecvErr:
+		connection.Close()
+		<-sigSendErr
+	case <-sigSendErr:
+		connection.Close()
+		<-sigRecvErr
+	}
+
 	close(client.ch)
 }
 
@@ -155,10 +152,11 @@ func listen(recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- 
 	log.Printf("Listening for TCP connections on %v", listener.Addr())
 
 	for {
+		listener.SetDeadline(time.Now().Add(1 * time.Second))
 		connection, err := listener.Accept()
 
 		if err != nil {
-			log.Println("Errpr in TCP listener:", err)
+			log.Println("Error in TCP listener:", err)
 			continue
 		}
 		log.Printf("Handling incoming connection from %v", connection.RemoteAddr())
@@ -187,7 +185,13 @@ func getRemoteIp(connection net.Conn) string {
 	return strings.Split(connection.RemoteAddr().String(), ":")[0]
 }
 
-func Init(tcpSendMsg <-chan RawMessage, tcpBroadcastMsg <-chan []byte, tcpRecvMsg chan RawMessage, tcpConnected, tcpConnectionFailure, tcpDial chan string, localIp string) {
+func Init(tcpSendMsg <-chan RawMessage,
+	tcpBroadcastMsg <-chan []byte,
+	tcpRecvMsg chan<- RawMessage,
+	tcpConnected,
+	tcpConnectionFailure chan<- string,
+	tcpDial <-chan string,
+	localIp string) {
 
 	addClient := make(chan client)
 	rmClient := make(chan client)
@@ -201,3 +205,8 @@ func Init(tcpSendMsg <-chan RawMessage, tcpBroadcastMsg <-chan []byte, tcpRecvMs
 		go dial(remoteIp, tcpRecvMsg, addClient, rmClient)
 	}
 }
+
+//Incoming signal to stop TCP comm
+//Stop listener
+//Do not dial
+//Close pending connections
