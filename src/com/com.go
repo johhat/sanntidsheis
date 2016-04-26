@@ -1,9 +1,8 @@
 package com
 
 import (
-	"../elevator"
-	"../simdriver"
-	"../statetype"
+	driver "../simdriver"
+	s "../statetype"
 	"encoding/json"
 	"errors"
 	"log"
@@ -17,7 +16,6 @@ type LiftEvents struct {
 	Obstruction  chan bool
 }
 
-
 ///
 /// Event com stuff
 ///
@@ -25,16 +23,17 @@ type LiftEvents struct {
 type EventType int
 
 const (
-	//Click events
+	//Order events
 	NewExternalOrder EventType = iota
 	NewInternalOrder
-	SelfAssignedOrder
 
 	//Sensor events
 	PassingFloor
 	DoorOpenedByInternalOrder
 	StoppingToFinishOrder
 	LeavingFloor
+	DoorClosed
+	DirectionChanged
 )
 
 //
@@ -54,15 +53,18 @@ type DirectedMessage interface {
 // Click Event Msg implementation
 //
 
-type ClickEventMsg struct {
-	Type     EventType
-	Button   simdriver.ClickEvent //Etasje og opp/ned
-	NewState State
+type OrderEventMsg struct {
+	Button   driver.ClickEvent //Etasje og opp/ned
+	NewState s.State
 	Sender   string
 }
 
-func (m ClickEventMsg) MsgType() string {
-	return "ClickEventMsg"
+func (m OrderEventMsg) MsgType() string {
+	return "OrderEventMsg"
+}
+
+func CreateOrderEventMsg(btn driver.ClickEvent, newState s.State) OrderEventMsg {
+	return OrderEventMsg{Button: btn, NewState: newState}
 }
 
 //
@@ -71,7 +73,7 @@ func (m ClickEventMsg) MsgType() string {
 
 type SensorEventMsg struct {
 	Type     EventType
-	NewState State
+	NewState s.State
 	Sender   string
 }
 
@@ -79,17 +81,25 @@ func (m SensorEventMsg) MsgType() string {
 	return "SensorEventMsg"
 }
 
+func CreateSensorEventMsg(eventType EventType, newState s.State) SensorEventMsg {
+	return SensorEventMsg{Type: eventType, NewState: newState}
+}
+
 //
-// Initial State Msg implementation
+// Initial s.State Msg implementation
 //
 
 type InitialStateMsg struct {
-	NewState State
+	NewState s.State
 	Sender   string
 }
 
 func (m InitialStateMsg) MsgType() string {
 	return "InitialStateMsg"
+}
+
+func CreateInitialStateMsg(newState s.State) InitialStateMsg {
+	return InitialStateMsg{NewState: newState}
 }
 
 //
@@ -115,7 +125,7 @@ func (m Heartbeat) MsgType() string {
 //
 
 type OrderAssignmentMsg struct {
-	Button   simdriver.ClickEvent
+	Button   driver.ClickEvent
 	Assignee string
 }
 
@@ -125,6 +135,10 @@ func (m OrderAssignmentMsg) MsgType() string {
 
 func (m OrderAssignmentMsg) GetRecieverIp() string {
 	return m.Assignee
+}
+
+func CreateOrderAssignmentMsg(btn driver.ClickEvent, assignee string) OrderAssignmentMsg {
+	return OrderAssignmentMsg{Button: btn, Assignee: assignee}
 }
 
 //
@@ -152,8 +166,8 @@ func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Me
 	var m Message
 
 	switch msgType {
-	case "ClickEventMsg":
-		temp := ClickEventMsg{}
+	case "OrderEventMsg":
+		temp := OrderEventMsg{}
 		err = json.Unmarshal(*msgJSON, &temp)
 		temp.Sender = senderIp
 		m = temp
