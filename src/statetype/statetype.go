@@ -37,15 +37,17 @@ func (orders Orderset) restoreInternalOrders(){
 	}
 }
 
+func saveInternalOrder(floor int){
+	f, err := os.Create("/internalOrder"+strconv.Itoa(floor))
+}
+
 func (orders Orderset) isOrder(event simdriver.ClickEvent) bool {
 	if event.Floor < 0 || event.Floor > simdriver.NumFloors-1 {
 		fmt.Println("Attempted to check order for non-existing floor")
 		return false
 	} else if event.Type == simdriver.Up && event.Floor == simdriver.NumFloors-1 {
-		fmt.Println("Attempted to check order for non-existing floor")
 		return false
 	} else if event.Type == simdriver.Down && event.Floor == 0 {
-		fmt.Println("Attempted to check order for non-existing floor")
 		return false
 	}
 	return orders[event.Type][event.Floor]
@@ -116,7 +118,7 @@ func (orders Orderset) clearOrders(floor int){
 	orders[simdriver.Command][floor] = false
 }
 
-func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (responseTime, bestCaseTime, worstCaseTime float32){
+func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (responseTime float32){
 	fmt.Println("Estimating times for new order on floor",newOrder.Floor,"of type",newOrder.Type)
 	if ((newOrder.Type == simdriver.Up) && (newOrder.Floor == simdriver.NumFloors-1)) || ((newOrder.Type == simdriver.Down) && (newOrder.Floor == 0)){
 		fmt.Println("Attempted to get response time of non-existing order type")
@@ -132,13 +134,6 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 		worstCaseTime = -1
 		return
 	}
-	/*
-	Given that the order is assigned to this elevator
-	- Find the time until the order is cleared by simulating the elevator behaviour
-	- Then find best case and worst case time until the passenger will get to the 
-	  destination floor, based on the other orders in the queue and the possible
-	  destinations (max 3, min 1, average 2)
-	*/
 
 	//Among the possible destinations, find the floors closest and furthest away
 	var bestCaseFloor int
@@ -258,4 +253,36 @@ func deepOrdersetCopy(from Orderset, to Orderset) {
 			to[btn][floor] = isSet
 		}
 	}
+}
+
+func (oldState State) diff(newState State) (lastPassedFloor, direction, moving, orders, valid, dooropen bool) {
+	if oldState.LastPassedFloor == newState.LastPassedFloor{
+		lastPassedFloor = true
+	}
+	if oldState.Direction == newState.Direction {
+		direction = false
+	}
+	if oldState.Moving == newState.Moving{
+		moving = false
+	}
+	if newState.Valid{
+		valid = true
+	}
+	if oldState.DoorOpen == newState.DoorOpen{
+		dooropen = true
+	}
+
+	orders = true
+	for btn, floorOrders := range oldState.Orders {
+		if _, ok := newState[btn]; !ok {
+			orders = false
+			return
+		}
+		for floor, isSet := range floorOrders{
+			if newIsSet, ok := newState[btn][floor]; !ok || newIsSet != isSet {
+				orders = false
+				return
+			}
+		}
+	}	
 }
