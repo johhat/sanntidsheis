@@ -36,27 +36,41 @@ func init() {
 	}
 }
 
-func NetworkLoop(sendMsgChan <-chan com.Message, recvMsgChan chan<- com.Message, connectedChan, disconnectedChan chan<- string) {
+func NetworkLoop(sendMsgChan <-chan com.Message,
+	recvMsgChan chan<- com.Message,
+	connectedChan,
+	disconnectedChan chan<- string,
+	disconnectFromNetwork,
+	reconnectToNetwork <-chan bool) {
 
 	log.Println("---Init network loop---")
 	log.Println("The ip of this computer is: ", localIp)
 
+	//Change state here
+	networkModuleIsActive := true
 	clients := make(map[string]connectionStatus)
 
+	//Make collection of abortchans - for range over them on disconnectFromNetwork-signal
+	stopUdpHeartbeats, stopTcpHeartbeats := make(chan bool), make(chan bool)
+
+	//UDP
 	udpBroadcastMsg := make(chan []byte)
 	udpRecvMsg := make(chan udp.RawMessage)
 	handleUdpMsgRecv := getUdpMsgRecvHandler()
 	go udp.Init(udpBroadcastMsg, udpRecvMsg, localIp)
-	go udpSendHeartbeats(udpBroadcastMsg)
+	go udpSendHeartbeats(udpBroadcastMsg, stopUdpHeartbeats) //TODO: Stopp utsending dersom frakoblet
 
+	//TCP
 	tcpSendMsg := make(chan tcp.RawMessage)
 	tcpBroadcastMsg := make(chan []byte)
 	tcpRecvMsg := make(chan tcp.RawMessage)
 	tcpConnected := make(chan string)
 	tcpConnectionFailure := make(chan string)
 	tcpDial := make(chan string)
+
+	//TODO: Bryt tilkobling, Avbryt lytting og ikke gjør dial dersom frakoblet
 	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
-	go tcpSendHeartbeats(tcpBroadcastMsg)
+	go tcpSendHeartbeats(tcpBroadcastMsg, stopTcpHeartbeats) //TODO: Stopp utsending dersom frakoblet
 	go handleTcpMsgRecv(tcpRecvMsg, recvMsgChan)
 
 	for {
@@ -64,6 +78,7 @@ func NetworkLoop(sendMsgChan <-chan com.Message, recvMsgChan chan<- com.Message,
 		case msg := <-sendMsgChan:
 			handleTcpSendMsg(msg, clients, tcpSendMsg, tcpBroadcastMsg)
 		case rawMsg := <-udpRecvMsg:
+			//TODO: Ikke ring dersom frakoblet
 			handleUdpMsgRecv(rawMsg, clients, tcpDial, localIp)
 		case remoteIp := <-tcpConnected:
 			clients[remoteIp] = connected
@@ -71,6 +86,33 @@ func NetworkLoop(sendMsgChan <-chan com.Message, recvMsgChan chan<- com.Message,
 		case remoteIp := <-tcpConnectionFailure:
 			clients[remoteIp] = disconnected
 			disconnectedChan <- remoteIp
+		case <-disconnectFromNetwork:
+			if networkModuleIsActive != false {
+				networkModuleIsActive = false
+
+				log.Println("disconnectFromNetwork is noop")
+				//TODO: Handle disconnect
+				// Stop outgoing HBs
+				//stopUdpHeartbeats <- true
+				//stopTcpHeartbeats <- true
+				// Disconnect from existing TCP-conns
+				// Ignore incoming TCP-dials
+				// Ignore incoming HBs
+				// Do not dial
+
+			}
+
+		case <-reconnectToNetwork:
+			if networkModuleIsActive != true {
+
+				log.Println("reconnectToNetwork is noop")
+				//TODO: Handle reconnect
+				// Restart outgoing HBs
+				// React on incoming TCP-calls
+				// React on incoming HBs
+				// Dial
+				networkModuleIsActive = true
+			}
 		}
 	}
 }
@@ -101,31 +143,39 @@ func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpS
 	}
 }
 
-func tcpSendHeartbeats(tcpBroadcastMsg chan<- []byte) {
+func tcpSendHeartbeats(tcpBroadcastMsg chan<- []byte, quit <-chan bool) {
 
 	tcpHeartbeatnum := 0
 	tcpHeartbeatTick := time.Tick(tcpHeartbeatInterval)
 
 	for {
-		<-tcpHeartbeatTick
-		m := com.CreateHeartbeat(tcpHeartbeatnum)
-		w := com.WrapMessage(m)
-		tcpBroadcastMsg <- w.Encode()
-		tcpHeartbeatnum++
+		select {
+		case <-tcpHeartbeatTick:
+			m := com.CreateHeartbeat(tcpHeartbeatnum)
+			w := com.WrapMessage(m)
+			tcpBroadcastMsg <- w.Encode()
+			tcpHeartbeatnum++
+		case <-quit:
+			return
+		}
 	}
 }
 
-func udpSendHeartbeats(udpBroadcastMsg chan<- []byte) {
+func udpSendHeartbeats(udpBroadcastMsg chan<- []byte, quit <-chan bool) {
 
 	udpHeartbeatNum := 0
 	udpHeatbeatTick := time.Tick(udpHeartbeatInterval)
 
 	for {
-		<-udpHeatbeatTick
-		m := com.CreateHeartbeat(udpHeartbeatNum)
-		w := com.WrapMessage(m)
-		udpBroadcastMsg <- w.Encode()
-		udpHeartbeatNum++
+		select {
+		case <-udpHeatbeatTick:
+			m := com.CreateHeartbeat(udpHeartbeatNum)
+			w := com.WrapMessage(m)
+			udpBroadcastMsg <- w.Encode()
+			udpHeartbeatNum++
+		case <-quit:
+			return
+		}
 	}
 }
 

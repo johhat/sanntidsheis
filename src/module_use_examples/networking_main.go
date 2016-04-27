@@ -27,12 +27,17 @@ func main() {
 
 	log.Println("--Start of network main file--")
 
-	sendMsgChan := make(chan com.Message)
-	recvMsgChan := make(chan com.Message)
-	connected := make(chan string)
-	disconnected := make(chan string)
+	sendMsgChan, recvMsgChan := make(chan com.Message), make(chan com.Message)
+	connected, disconnected := make(chan string), make(chan string)
+	disconnectFromNetwork, reconnectToNetwork := make(chan bool), make(chan bool)
 
-	go networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected)
+	go networking.NetworkLoop(
+		sendMsgChan,
+		recvMsgChan,
+		connected,
+		disconnected,
+		disconnectFromNetwork,
+		reconnectToNetwork)
 
 	for {
 		select {
