@@ -21,6 +21,7 @@ import (
 //Closed ch returnerer umiddelbart ved recv. Panic ved close.
 //Nil ch blokkerer uendelig, både send og recieve
 //For range stopper når en kanal er stengt
+//Om pipelines: http://blog.golang.org/pipelines
 
 func main() {
 

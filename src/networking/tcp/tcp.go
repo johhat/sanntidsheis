@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,46 +23,76 @@ type RawMessage struct {
 type client struct {
 	ip   string
 	conn net.Conn
-	ch   chan []byte
+	chs  clientChans
 }
 
-func (c client) RecieveFrom(ch chan<- RawMessage, sigRecvErr chan<- bool) {
-
-	reader := bufio.NewReader(c.conn)
-
-	for {
-		c.conn.SetReadDeadline(time.Now().Add(readTimeout))
-
-		bytes, err := reader.ReadBytes('\n')
-
-		if err != nil {
-			log.Println("TCP recv error. Connection: ", c.ip, " error:", err)
-			sigRecvErr <- true
-			return
-		}
-		ch <- RawMessage{Data: bytes, Ip: c.ip}
-	}
+type clientChans struct {
+	sendMsg    chan []byte
+	pipeClosed chan bool
+	disconnect chan bool
 }
 
-func (c *client) SendTo(sigSendErr chan<- bool) {
+func (c client) RecieveFrom(ch chan<- RawMessage) <-chan bool {
 
-	var b bytes.Buffer
+	signalReturn := make(chan bool)
 
-	for msg := range c.ch {
+	go func() {
+		defer func() {
+			select {
+			case signalReturn <- true:
+			case <-c.chs.pipeClosed:
+			}
+			close(signalReturn)
+		}()
 
-		b.Write(msg)
-		b.WriteRune('\n')
+		reader := bufio.NewReader(c.conn)
 
-		_, err := c.conn.Write(b.Bytes())
+		for {
+			c.conn.SetReadDeadline(time.Now().Add(readTimeout))
 
-		b.Reset()
+			bytes, err := reader.ReadBytes('\n')
 
-		if err != nil {
-			log.Println("TCP send error. Connection: ", c.ip, " error:", err)
-			sigSendErr <- true
-			return
+			if err != nil {
+				log.Println("TCP recv error. Connection: ", c.ip, " error:", err)
+				return
+			}
+			ch <- RawMessage{Data: bytes, Ip: c.ip}
 		}
-	}
+	}()
+	return signalReturn
+}
+
+func (c *client) SendTo() <-chan bool {
+
+	signalReturn := make(chan bool)
+
+	go func() {
+		defer func() {
+			select {
+			case signalReturn <- true:
+			case <-c.chs.pipeClosed:
+			}
+			close(signalReturn)
+		}()
+
+		var b bytes.Buffer
+
+		for msg := range c.chs.sendMsg {
+
+			b.Write(msg)
+			b.WriteRune('\n')
+
+			_, err := c.conn.Write(b.Bytes())
+
+			b.Reset()
+
+			if err != nil {
+				log.Println("TCP send error. Connection: ", c.ip, " error:", err)
+				return
+			}
+		}
+	}()
+	return signalReturn
 }
 
 func handleMessages(sendMsg <-chan RawMessage,
@@ -72,16 +103,16 @@ func handleMessages(sendMsg <-chan RawMessage,
 	tcpConnected chan<- string,
 	tcpConnectionFailure chan<- string) {
 
-	clients := make(map[net.Conn]chan<- []byte)
+	clients := make(map[net.Conn]clientChans)
 
 	for {
 		select {
 		case rawMsg := <-sendMsg:
-			sendToIp(rawMsg.Ip, clients, rawMsg.Data)
+			go sendToIp(rawMsg.Ip, clients, rawMsg.Data)
 		case msg := <-broadcastMsg:
-			broadcast(clients, msg)
+			go broadcast(clients, msg)
 		case client := <-addClient:
-			clients[client.conn] = client.ch
+			clients[client.conn] = client.chs
 			tcpConnected <- client.ip
 		case client := <-rmClient:
 			delete(clients, client.conn)
@@ -90,21 +121,29 @@ func handleMessages(sendMsg <-chan RawMessage,
 	}
 }
 
-func sendToIp(ip string, clients map[net.Conn]chan<- []byte, message []byte) {
-	for connection, channel := range clients {
+func sendToIp(ip string, clients map[net.Conn]clientChans, message []byte) {
+	for connection, channels := range clients {
 		if getRemoteIp(connection) == ip {
-			channel <- message
+			select {
+			case channels.sendMsg <- message:
+			case <-channels.pipeClosed:
+				log.Println("SendToIp send failed - pipe closed. Ip:", ip)
+			}
 			return
 		}
 	}
 	log.Println("TCP send to ip failed. No existing connection to ip", ip)
 }
 
-func broadcast(clients map[net.Conn]chan<- []byte, message []byte) {
-	for _, channel := range clients {
-		go func(messageChannel chan<- []byte) {
-			messageChannel <- message
-		}(channel)
+func broadcast(clients map[net.Conn]clientChans, message []byte) {
+	for _, chs := range clients {
+		go func(chs clientChans) {
+			select {
+			case chs.sendMsg <- message:
+			case <-chs.pipeClosed:
+				log.Println("Broadcast to one recvr failed - pipe closed.")
+			}
+		}(chs)
 	}
 }
 
@@ -113,35 +152,63 @@ func handleConnection(connection net.Conn, recvMsg chan<- RawMessage, addClient 
 	client := client{
 		ip:   getRemoteIp(connection),
 		conn: connection,
-		ch:   make(chan []byte),
+		chs: clientChans{
+			sendMsg:    make(chan []byte),
+			pipeClosed: make(chan bool),
+			disconnect: make(chan bool),
+		},
 	}
 
 	addClient <- client
 
 	defer func() {
+		close(client.chs.pipeClosed)
+		connection.Close()
 		log.Printf("Connection from %v closed.\n", connection.RemoteAddr())
 		rmClient <- client
+		close(client.chs.sendMsg) //Force panic in any go-routines blocked on send to client
 	}()
 
-	sigRecvErr := make(chan bool)
-	sigSendErr := make(chan bool)
+	signalCloseConn := mergeChans(
+		client.chs.pipeClosed,
+		client.RecieveFrom(recvMsg),
+		client.SendTo(),
+		client.chs.disconnect)
 
-	go client.RecieveFrom(recvMsg, sigRecvErr)
-	go client.SendTo(sigSendErr)
-
-	select {
-	case <-sigRecvErr:
-		connection.Close()
-		<-sigSendErr
-	case <-sigSendErr:
-		connection.Close()
-		<-sigRecvErr
-	}
-
-	close(client.ch)
+	<-signalCloseConn
 }
 
-func listen(recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- client) {
+func mergeChans(done <-chan bool, channels ...<-chan bool) <-chan bool {
+	var wg sync.WaitGroup
+	merged := make(chan bool)
+
+	output := func(ch <-chan bool) {
+		defer wg.Done()
+		for elem := range ch {
+			select {
+			case merged <- elem:
+			case <-done:
+				return
+			}
+		}
+	}
+
+	wg.Add(len(channels))
+	for _, ch := range channels {
+		go output(ch)
+	}
+
+	go func() {
+		wg.Wait()
+		close(merged)
+	}()
+
+	return merged
+}
+
+func listen(recvMsg chan<- RawMessage,
+	addClient chan<- client,
+	rmClient chan<- client) {
 
 	listener, err := net.Listen("tcp", tcpListenPort)
 
@@ -152,7 +219,6 @@ func listen(recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- 
 	log.Printf("Listening for TCP connections on %v", listener.Addr())
 
 	for {
-		listener.SetDeadline(time.Now().Add(1 * time.Second))
 		connection, err := listener.Accept()
 
 		if err != nil {
@@ -164,7 +230,10 @@ func listen(recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- 
 	}
 }
 
-func dial(remoteIp string, recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- client) {
+func dial(remoteIp string,
+	recvMsg chan<- RawMessage,
+	addClient chan<- client,
+	rmClient chan<- client) {
 	connection, err := net.Dial("tcp", remoteIp+tcpListenPort)
 
 	for {
@@ -207,6 +276,6 @@ func Init(tcpSendMsg <-chan RawMessage,
 }
 
 //Incoming signal to stop TCP comm
-//Stop listener
+//Do not accept incoming dials (close accepts from listener)
 //Do not dial
 //Close pending connections
