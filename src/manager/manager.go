@@ -49,14 +49,21 @@ func Run(
 						fmt.Println("Manager was assigned order with wrong IP address")
 					} else {
 						states[localIp].Orders.AddOrder(msg.(com.OrderAssignmentMsg).Button)
+						simdriver.SetBtnLamp(msg.(com.OrderAssignmentMsg).Button.Floor, msg.(com.OrderAssignmentMsg).Button.Type, true)
 						send_chan <- com.OrderEventMsg{msg.(com.OrderAssignmentMsg).Button, states[localIp], localIp}
 					}
 				case com.OrderEventMsg:
 					//Sanity check av state-endring
 					states[msg.(com.OrderEventMsg).Sender].Orders.AddOrder(msg.(com.OrderEventMsg).Button)
-					//Skru på knappelys hvis ordren er ekstern
+					if msg.(com.OrderEventMsg).Button.Type != simdriver.Command {
+						simdriver.SetBtnLamp(msg.(com.OrderEventMsg).Button.Floor, msg.(com.OrderEventMsg).Button.Type, true)
+					}
 				case com.SensorEventMsg:
 					//Sanity check av state-endring
+					if msg.(com.SensorEventMsg).Type == com.StoppingToFinishOrder {
+						simdriver.SetBtnLamp(msg.(com.SensorEventMsg).NewState.LastPassedFloor, simdriver.Up, false)
+						simdriver.SetBtnLamp(msg.(com.SensorEventMsg).NewState.LastPassedFloor, simdriver.Down, false)
+					}
 					tmp := states[msg.(com.SensorEventMsg).Sender]
 					tmp.Direction = msg.(com.SensorEventMsg).NewState.Direction
 					tmp.LastPassedFloor = msg.(com.SensorEventMsg).NewState.LastPassedFloor
