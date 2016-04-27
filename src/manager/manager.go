@@ -186,11 +186,16 @@ func Run(
 					send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
 				}
 			} else {
+				exists := false
 				for _, state := range states {
 					if state.Orders.IsOrder(buttonClick) {
 						fmt.Println("Order already exists:", buttonClick)
-						break //Order already exists
+						exists = true
+						break
 					}
+				}
+				if exists {
+					break
 				}
 				bestIp := localIp                          // Local elevator is default
 				var shortestResponseTime float32 = 99999.9 //Inf
