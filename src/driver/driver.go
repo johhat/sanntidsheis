@@ -1,7 +1,6 @@
 package driver
 
 import (
-	. "./channels"
 	. "./elevatorIo"
 	"fmt"
 	"log"
