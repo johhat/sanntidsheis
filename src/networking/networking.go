@@ -61,6 +61,8 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	go udpSendHeartbeats(udpBroadcastMsg, stopUdpHeartbeats) //TODO: Stopp utsending dersom frakoblet
 
 	//TCP
+	setTcpOperationMode := make(chan tcp.TcpOperationMode)
+
 	tcpSendMsg := make(chan tcp.RawMessage)
 	tcpBroadcastMsg := make(chan []byte)
 	tcpRecvMsg := make(chan tcp.RawMessage)
@@ -69,17 +71,21 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	tcpDial := make(chan string)
 
 	//TODO: Bryt tilkobling, Avbryt lytting og ikke gjør dial dersom frakoblet
-	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, localIp)
-	go tcpSendHeartbeats(tcpBroadcastMsg, stopTcpHeartbeats) //TODO: Stopp utsending dersom frakoblet
+	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, setTcpOperationMode, localIp)
+	go tcpSendHeartbeats(tcpBroadcastMsg, stopTcpHeartbeats)
 	go handleTcpMsgRecv(tcpRecvMsg, recvMsgChan)
 
 	for {
 		select {
 		case msg := <-sendMsgChan:
+
+			log.Println("Sending TCP msg:", msg)
+
 			handleTcpSendMsg(msg, clients, tcpSendMsg, tcpBroadcastMsg)
 		case rawMsg := <-udpRecvMsg:
-			//TODO: Ikke ring dersom frakoblet
-			handleUdpMsgRecv(rawMsg, clients, tcpDial, localIp)
+			if networkModuleIsActive {
+				handleUdpMsgRecv(rawMsg, clients, tcpDial, localIp)
+			}
 		case remoteIp := <-tcpConnected:
 			clients[remoteIp] = connected
 			connectedChan <- remoteIp
@@ -93,9 +99,12 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 				log.Println("disconnectFromNetwork is noop")
 				//TODO: Handle disconnect
 				// Stop outgoing HBs
-				//stopUdpHeartbeats <- true
-				//stopTcpHeartbeats <- true
+				stopUdpHeartbeats <- true
+				stopTcpHeartbeats <- true
+				setTcpOperationMode <- tcp.Idle
+
 				// Disconnect from existing TCP-conns
+
 				// Ignore incoming TCP-dials
 				// Ignore incoming HBs
 				// Do not dial
@@ -108,9 +117,12 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 				log.Println("reconnectToNetwork is noop")
 				//TODO: Handle reconnect
 				// Restart outgoing HBs
+				go udpSendHeartbeats(udpBroadcastMsg, stopUdpHeartbeats)
+				go tcpSendHeartbeats(tcpBroadcastMsg, stopTcpHeartbeats)
 				// React on incoming TCP-calls
 				// React on incoming HBs
 				// Dial
+				setTcpOperationMode <- tcp.Active
 				networkModuleIsActive = true
 			}
 		}
@@ -133,11 +145,26 @@ func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpS
 		}
 
 		w := com.WrapMessage(directedMsg)
-		tcpSendMsg <- tcp.RawMessage{Data: w.Encode(), Ip: ip}
 
+		data, err := w.Encode()
+
+		if err != nil {
+			log.Println("Error when encoding msg in handleTcpSendMsg. Ignoring msg. Err:", err, "Msg:", msg)
+			return
+		}
+
+		tcpSendMsg <- tcp.RawMessage{Data: data, Ip: ip}
 	case com.Message:
 		w := com.WrapMessage(msg)
-		tcpBroadcastMsg <- w.Encode()
+
+		data, err := w.Encode()
+
+		if err != nil {
+			log.Println("Error when encoding msg in handleTcpSendMsg. Ignoring msg. Err:", err, "Msg:", msg)
+			return
+		}
+
+		tcpBroadcastMsg <- data
 	default:
 		log.Println("Error in handleTcpSendMsg: Message does not satisfy any relevant message interface")
 	}
@@ -153,7 +180,14 @@ func tcpSendHeartbeats(tcpBroadcastMsg chan<- []byte, quit <-chan bool) {
 		case <-tcpHeartbeatTick:
 			m := com.CreateHeartbeat(tcpHeartbeatnum)
 			w := com.WrapMessage(m)
-			tcpBroadcastMsg <- w.Encode()
+
+			data, err := w.Encode()
+
+			if err != nil {
+				log.Println("Error when encoding Heartbeat. Err:", err, ". Message:", m)
+			}
+
+			tcpBroadcastMsg <- data
 			tcpHeartbeatnum++
 		case <-quit:
 			return
@@ -171,7 +205,14 @@ func udpSendHeartbeats(udpBroadcastMsg chan<- []byte, quit <-chan bool) {
 		case <-udpHeatbeatTick:
 			m := com.CreateHeartbeat(udpHeartbeatNum)
 			w := com.WrapMessage(m)
-			udpBroadcastMsg <- w.Encode()
+
+			data, err := w.Encode()
+
+			if err != nil {
+				log.Println("Error when encoding Heartbeat. Err:", err, ". Message:", m)
+			}
+
+			udpBroadcastMsg <- data
 			udpHeartbeatNum++
 		case <-quit:
 			return
@@ -185,6 +226,7 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- com.Mes
 
 	for rawMsg := range tcpRecvMsg {
 		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+		log.Println("New tcp msg recv", string(rawMsg.Data))
 		if err == nil {
 			switch m.(type) {
 			case com.Heartbeat:
@@ -193,7 +235,7 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- com.Mes
 				recvMsgChan <- m
 			}
 		} else {
-			log.Println("Error when decoding msg:", err, string(rawMsg.Data))
+			log.Println("Error when decoding TCP msg:", err, string(rawMsg.Data))
 		}
 	}
 }

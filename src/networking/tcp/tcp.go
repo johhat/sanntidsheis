@@ -15,6 +15,13 @@ const (
 	readTimeout   = 10 * time.Second
 )
 
+type TcpOperationMode int
+
+const (
+	Active TcpOperationMode = iota
+	Idle
+)
+
 type RawMessage struct {
 	Data []byte
 	Ip   string
@@ -260,6 +267,7 @@ func Init(tcpSendMsg <-chan RawMessage,
 	tcpConnected,
 	tcpConnectionFailure chan<- string,
 	tcpDial <-chan string,
+	setOperationMode <-chan TcpOperationMode,
 	localIp string) {
 
 	addClient := make(chan client)
