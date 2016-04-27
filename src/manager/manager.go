@@ -24,7 +24,8 @@ func Run(
 	start_moving		<-chan bool,
 	PassingFloor		<-chan bool,
 	elev_error_chan		chan bool,
-	drop_conn_chan		chan<- bool,
+	disconnectFromNetwork chan<- bool,
+	reconnectToNetwork	chan<- bool,
 	networking_timeout	<-chan bool){
 
 	localIp := networking.GetLocalIp()
@@ -217,7 +218,7 @@ func Run(
 				send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp], localIp}
 			case <-elev_error_chan:
 				error_state = true
-				drop_conn_chan <- true
+				disconnectFromNetwork <- true
 				//Stop light on
 				//Remove remote elevators from states?
 		}
