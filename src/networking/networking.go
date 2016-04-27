@@ -226,7 +226,6 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- com.Mes
 
 	for rawMsg := range tcpRecvMsg {
 		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
-		log.Println("New tcp msg recv", string(rawMsg.Data))
 		if err == nil {
 			switch m.(type) {
 			case com.Heartbeat:
