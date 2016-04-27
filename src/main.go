@@ -1,14 +1,14 @@
 package main
 
 import (
-	"./networking"
-	"./manager"
+	"./com"
 	"./elevator"
+	"./manager"
+	"./networking"
 	"./simdriver"
+	"log"
 	"os"
 	"os/signal"
-	"log"
-	"./com"
 )
 
 func main() {
@@ -25,16 +25,16 @@ func main() {
 	var readDir_chan = make(chan elevator.ReadDirection)
 	var readOrder_chan = make(chan elevator.ReadOrder)
 	var deletes_chan = make(chan elevator.DeleteOp)
-	var drop_conn_chan = make(chan bool)
 	var networking_timeout = make(chan bool)
 	var start_moving_chan = make(chan bool)
 	var passing_floor_chan = make(chan bool)
-	
 
 	var sendMsgChan = make(chan com.Message)
 	var recvMsgChan = make(chan com.Message)
 	var connected = make(chan string)
 	var disconnected = make(chan string)
+	var disconnectFromNetwork = make(chan bool)
+	var reconnectToNetwork = make(chan bool)
 
 	simdriver.Init(clickEvent_chan, sensorEvent_chan)
 
@@ -51,17 +51,17 @@ func main() {
 		passing_floor_chan,
 		deletes_chan)
 
-	go networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected)
+	go networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected, disconnectFromNetwork, reconnectToNetwork)
 
 	c := make(chan os.Signal)
-    signal.Notify(c, os.Interrupt)
-    go func() {
-        <- c
-        simdriver.SetMotorDirection(simdriver.MotorStop)
-        log.Fatal("[FATAL]\tUser terminated program")
-    }()
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		simdriver.SetMotorDirection(simdriver.MotorStop)
+		log.Fatal("[FATAL]\tUser terminated program")
+	}()
 
-    manager.Run(
+	manager.Run(
 		sendMsgChan,
 		recvMsgChan,
 		connected,
@@ -76,7 +76,8 @@ func main() {
 		start_moving_chan,
 		passing_floor_chan,
 		elev_error_chan,
-		drop_conn_chan,
+		disconnectFromNetwork,
+		reconnectToNetwork,
 		networking_timeout)
 
 }
