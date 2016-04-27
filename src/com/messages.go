@@ -5,34 +5,6 @@ import (
 	s "../statetype"
 )
 
-const HeartbeatCode = "SecretString"
-
-type LiftEvents struct {
-	FloorReached chan int
-	StopButton   chan bool
-	Obstruction  chan bool
-}
-
-///
-/// Event com stuff
-///
-
-type EventType int
-
-const (
-	//Order events
-	NewExternalOrder EventType = iota
-	NewInternalOrder
-
-	//Sensor events
-	PassingFloor
-	DoorOpenedByInternalOrder
-	StoppingToFinishOrder
-	LeavingFloor
-	DoorClosed
-	DirectionChanged
-)
-
 //
 // Msg interfaces
 //
@@ -90,6 +62,8 @@ func (m InitialStateMsg) MsgType() string {
 //
 // Heartbeat Msg implementation
 //
+
+const HeartbeatCode = "SecretString"
 
 func CreateHeartbeat(heartbeatNum int) Heartbeat {
 	return Heartbeat{Code: HeartbeatCode, HeartbeatNum: heartbeatNum}
