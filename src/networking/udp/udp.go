@@ -19,7 +19,7 @@ type RawMessage struct {
 func recieve(recieveChan chan<- RawMessage, broadcastListener *net.UDPConn) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Println("Error in UDP recieve: %s \n Closing connection.", r)
+			log.Printf("Error in UDP recieve: %s \n Closing connection.", r)
 			broadcastListener.Close()
 		}
 	}()
