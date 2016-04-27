@@ -83,42 +83,7 @@ func Run(
 					statetype.DeepOrdersetCopy(msg.(com.InitialStateMsg).NewState.Orders,states[msg.(com.InitialStateMsg).Sender].Orders)
 				default:
 					fmt.Println("Manager received invalid message")
-		case msg := <-receive_chan:
-			switch msg.(type) {
-			case com.OrderAssignmentMsg:
-				if msg.(com.OrderAssignmentMsg).Assignee != localIp {
-					fmt.Println("Manager was assigned order with wrong IP address")
-				} else {
-					states[localIp].Orders.AddOrder(msg.(com.OrderAssignmentMsg).Button)
-					send_chan <- com.OrderEventMsg{msg.(com.OrderAssignmentMsg).Button, states[localIp], localIp}
-				}
-			case com.OrderEventMsg:
-				//Sanity check av state-endring
-				states[msg.(com.OrderEventMsg).Sender].Orders.AddOrder(msg.(com.OrderEventMsg).Button)
-				//Skru på knappelys hvis ordren er ekstern
-			case com.SensorEventMsg:
-				//Sanity check av state-endring
-				tmp := states[msg.(com.SensorEventMsg).Sender]
-				tmp.Direction = msg.(com.SensorEventMsg).NewState.Direction
-				tmp.LastPassedFloor = msg.(com.SensorEventMsg).NewState.LastPassedFloor
-				tmp.Moving = msg.(com.SensorEventMsg).NewState.Moving
-				tmp.SequenceNumber = msg.(com.SensorEventMsg).NewState.SequenceNumber
-				tmp.DoorOpen = msg.(com.SensorEventMsg).NewState.DoorOpen
-				states[msg.(com.SensorEventMsg).Sender] = tmp
-			case com.InitialStateMsg:
-				//Sanity check av state-endring
-				tmp := states[msg.(com.InitialStateMsg).Sender]
-				tmp.LastPassedFloor = msg.(com.InitialStateMsg).NewState.LastPassedFloor
-				tmp.Direction = msg.(com.InitialStateMsg).NewState.Direction
-				tmp.Moving = msg.(com.InitialStateMsg).NewState.Moving
-				tmp.SequenceNumber = msg.(com.InitialStateMsg).NewState.SequenceNumber
-				tmp.DoorOpen = msg.(com.InitialStateMsg).NewState.DoorOpen
-				tmp.Valid = true
-				states[msg.(com.InitialStateMsg).Sender] = tmp
-				statetype.DeepOrdersetCopy(msg.(com.InitialStateMsg).NewState.Orders, states[msg.(com.InitialStateMsg).Sender].Orders)
-			default:
-				fmt.Println("Manager received invalid message")
-			}
+				}		
 		case readOrder := <-readOrder_chan:
 			readOrder.Resp <- states[localIp].Orders.IsOrder(readOrder.Order)
 		case readDir := <-readDir_chan:
