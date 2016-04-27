@@ -76,7 +76,7 @@ func main() {
 		simdriver.SetMotorDirection(simdriver.MotorStop)
 		log.Fatal("[FATAL]\tUser terminated program")
 	}()
-	time.sleep(500 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond) //Todo: Make network module default to disconnect state
 	networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected, disconnectFromNetwork, reconnectToNetwork)
 
 
