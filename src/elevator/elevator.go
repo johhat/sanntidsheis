@@ -49,19 +49,21 @@ type deleteOp struct {
 }
 
 func Run(
-	completed_floor chan<- int,
-	missed_deadline chan<- bool,
-	floor_reached <-chan int,
-	new_order <-chan simdriver.ClickEvent,
-	new_direction chan<- Direction_t) {
-
-	readDirs := make(chan readDirection)
-	readOrders := make(chan readOrder)
-	deletes := make(chan deleteOp)
+	completed_floor 	chan<- int,
+	elev_error		 	chan<- bool,
+	floor_reached 		<-chan int,
+	new_order 			<-chan simdriver.ClickEvent,
+	new_direction 		chan<- Direction_t,
+	door_closed_chan	chan<- bool,
+	readDirs			chan<- readDirection,
+	readOrders			chan<- readOrder,
+	start_moving		chan<- bool,
+	passingFloor_chan	chan<- bool,
+	deletes				chan<- deleteOp) {
 
 	reply_chan := make(chan bool)
 
-	go func() {
+	/*go func() {
 		orders := make(Orders)
 		orders[simdriver.Up] = make(FloorOrders)
 		orders[simdriver.Down] = make(FloorOrders)
@@ -85,7 +87,7 @@ func Run(
 				delete.resp <- true
 			}
 		}
-	}()
+	}()*/
 
 	deadline_timer := time.NewTimer(deadline_period)
 	deadline_timer.Stop()
@@ -98,7 +100,10 @@ func Run(
 	last_passed_floor := simdriver.GetCurrentFloor()
 	if last_passed_floor == -1 {
 		//Even though the driver initialized the elevator to a valid floor, it seems to be something wrong
+		//Run init again or crash the program?
 	}
+
+	passingFloor := true
 
 	for {
 		switch state {
@@ -110,8 +115,10 @@ func Run(
 			orderForwardAtThisFloor := <-reply_chan
 
 			if internal0rderAtThisFloor || orderForwardAtThisFloor {
+				passingFloor = false
 				simdriver.SetMotorDirection(simdriver.MotorStop)
 				simdriver.SetDoorOpenLamp(true)
+				completed_floor <- last_passed_floor
 				deadline_timer.Stop()
 				door_timer.Reset(door_period)
 				state = doorOpen
@@ -122,14 +129,19 @@ func Run(
 			orderAhead := <-reply_chan
 
 			if orderAhead {
+				start_moving <- true
+				if(passingFloor){
+					passingFloor_chan <- true
+				}
 				switch current_direction {
 				case Up:
-					simdriver.SetMotorDirection(simdriver.MotorUp) //Kanskje bare gjøre dette hvis det endrer noe?
+					simdriver.SetMotorDirection(simdriver.MotorUp)
 				case Down:
 					simdriver.SetMotorDirection(simdriver.MotorDown)
 				}
 				deadline_timer.Reset(deadline_period)
 				state = movingBetween
+				passingFloor = true
 				break
 			}
 
@@ -138,19 +150,17 @@ func Run(
 			readOrders <- readOrder{simdriver.ClickEvent{last_passed_floor, current_direction.OppositeDirection().toBtnType()}, reply_chan}
 			orderBackwardAtThisFloor := <-reply_chan
 
-			if orderBehind || orderBackwardAtThisFloor { //Ordre bakover
+			if orderBehind || orderBackwardAtThisFloor {
 				current_direction = current_direction.OppositeDirection()
 			}
 
 		case doorOpen:
-			select { //Trenger vel ikke select her?
-			case <-door_timer.C:
-				simdriver.SetDoorOpenLamp(false)
-				state = atFloor
-				//completed_floor <- last_passed_floor
-				deletes <- deleteOp{last_passed_floor, reply_chan}
-				<-reply_chan
-			}
+			<-door_timer.C:
+			simdriver.SetDoorOpenLamp(false)
+			state = atFloor
+			door_closed_chan <- true
+			deletes <- deleteOp{last_passed_floor, reply_chan}
+			<-reply_chan
 		case movingBetween:
 			select {
 			case floor := <-floor_reached:
@@ -159,64 +169,11 @@ func Run(
 				state = atFloor
 				deadline_timer.Stop()
 			case <-deadline_timer.C:
-				missed_deadline <- true
+				elev_error <- true
 			}
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-}
-
-func (orders Orders) isOrder(event simdriver.ClickEvent) bool {
-	if event.Floor < 0 || event.Floor > simdriver.NumFloors-1 {
-		//Handle invalid floor
-		return false
-	} else if event.Type == simdriver.Up && event.Floor == simdriver.NumFloors-1 {
-		//Handle invalid button
-		return false
-	} else if event.Type == simdriver.Down && event.Floor == 0 {
-		//Handle invalid button
-		return false
-	}
-	return orders[event.Type][event.Floor]
-}
-
-func (orders Orders) isOrderAhead(currentFloor int, direction Direction_t) bool {
-	for _, buttonOrders := range orders {
-		for floor, isSet := range buttonOrders {
-			if direction == Up && floor > currentFloor && isSet {
-				return true
-			} else if direction == Down && floor < currentFloor && isSet {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (orders Orders) isOrderBehind(currentFloor int, direction Direction_t) bool {
-	return orders.isOrderAhead(currentFloor, direction.OppositeDirection())
-}
-
-func (orders Orders) addOrder(order simdriver.ClickEvent) {
-	switch order.Type {
-	case simdriver.Up:
-		if order.Floor < 0 || order.Floor > simdriver.NumFloors-2 {
-			//Handle error
-			return
-		}
-	case simdriver.Down:
-		if order.Floor < 1 || order.Floor > simdriver.NumFloors-1 {
-			//Handle error
-			return
-		}
-	case simdriver.Command:
-		if order.Floor >= simdriver.NumFloors || order.Floor < 0 {
-			//Handle error
-			return
-		}
-	}
-	orders[order.Type][order.Floor] = true
-	simdriver.SetBtnLamp(order.Floor, order.Type, true)
 }
 
 func (direction Direction_t) OppositeDirection() Direction_t {
@@ -224,35 +181,6 @@ func (direction Direction_t) OppositeDirection() Direction_t {
 		return Down
 	} else {
 		return Up
-	}
-}
-
-func (orders Orders) clearOrders(floor int) {
-	if floor != 0 {
-		simdriver.SetBtnLamp(floor, simdriver.Down, false)
-		orders[simdriver.Down][floor] = false
-	}
-	if floor != (simdriver.NumFloors - 1) {
-		simdriver.SetBtnLamp(floor, simdriver.Up, false)
-		orders[simdriver.Up][floor] = false
-	}
-	simdriver.SetBtnLamp(floor, simdriver.Command, false)
-	orders[simdriver.Command][floor] = false
-}
-
-func (orders Orders) Init() {
-	for floor := 0; floor < simdriver.NumFloors; floor++ {
-		if floor == 0 {
-			orders[simdriver.Up][floor] = false
-			orders[simdriver.Command][floor] = false
-		} else if floor == simdriver.NumFloors-1 {
-			orders[simdriver.Down][floor] = false
-			orders[simdriver.Command][floor] = false
-		} else {
-			orders[simdriver.Up][floor] = false
-			orders[simdriver.Down][floor] = false
-			orders[simdriver.Command][floor] = false
-		}
 	}
 }
 

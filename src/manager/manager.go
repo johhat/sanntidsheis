@@ -17,13 +17,18 @@ func Run(
 	readDir_chan		<-chan readDirection,
 	readOrder_chan		<-chan readOrder,
 	completed_floor		<-chan int,
+	door_closed_chan	<-chan bool,
 	clickEvent_chan		<-chan simdriver.ClickEvent,
 	sensorEvent_chan	<-chan int,
-	elev_error_chan		<-chan bool,
-	//drop_conn_chan		chan<- bool,
-	selfassign_chan		chan<- simdriver.ClickEvent){
+	floor_reached		chan<- int,
+	start_moving		<-chan bool,
+	PassingFloor		<-chan bool,
+	elev_error_chan		chan bool,
+	drop_conn_chan		chan<- bool,
+	networking_timeout	<-chan bool){
 
 	localIp := networking.GetLocalIp()
+	error_state := false
 
 	//Initialize queue
 	states := make(map[string]statetype.State)
@@ -42,11 +47,12 @@ func Run(
 						fmt.Println("Manager was assigned order with wrong IP address")
 					} else {
 						states[localIp].Orders.addOrder(msg.(com.OrderAssignment).Button)
-						send_chan <- com.CreateClickEventMsg()//fix
+						send_chan <- com.OrderEventMsg{msg.(com.OrderAssignment).Button, states[localIp], localIp}
 					}
 				case com.OrderEventMsg:
 					//Sanity check av state-endring
 					states[msg.(com.OrderEventMsg).Sender].Orders.addOrder(msg.(com.OrderEventMsg).Button)
+					//Skru på knappelys hvis ordren er ekstern
 				case com.SensorEventMsg:
 					//Sanity check av state-endring
 					state[msg.(com.SensorEventMsg).Sender].LastPassedFloor = msg.(com.SensorEventMsg).NewState.LastPassedFloor
@@ -75,7 +81,9 @@ func Run(
             	}
 
 			case completed := <-completed_floor:
+				states[localIp].Moving = false
 				states[localIp].Orders.clearOrders(completed.floor)
+				send_chan <- SensorEventMsg{com.StoppingToFinishOrder, states[localIp], localIp}
 
 			case disconnected := <-disconnected_chan:
 
@@ -111,10 +119,10 @@ func Run(
 									fmt.Println("Reassigning order floor",floor,",type",btnType,"to ip",bestIp)
 									if bestIp == localIp{
 										states[localIp].Sequencenumber += 1
-										selfassign_chan <- simdriver{floor,btnType}
-										send_chan <- com.CreateClickEventMsg()//fix
+										states[localIp].Orders.addOrder(simdriver{floor,btnType})
+										send_chan <- com.OrderEventMsg{simdriver{floor,btnType}, states[localIp], localIp}
 									} else {
-										send_chan <- com.CreateOrderAssignmentMsg()//fix
+										send_chan <- com.OrderAssignmentMsg{simdriver{floor,btnType},bestIp}
 									}
 								}
 							}
@@ -128,19 +136,25 @@ func Run(
 				states[ip].orders[simdriver.Up] = make(statetype.FloorOrders)
 				states[ip].orders[simdriver.Down] = make(statetype.FloorOrders)
 				states[ip].orders[simdriver.Command] = make(statetype.FloorOrders)
-				send_chan <- com.CreateInitialStateMsg()//fix
+				send_chan <- com.InitialStateMsg{states[localIp], localIp}
+
 			case buttonClick := clickEvent_chan: //Må endre til å inkludere stoppknapp
-				//Hvis stoppknapp
-					//Hvis vi er i service-modus
+				//Hvis stoppknapp {
+					//if error_state {
 						//Init på nytt?
 						//Restart heartbeats
 						//Lytt til heartbeats
+						//error_state = false
+					//}	
+					//continue
+				//}
 				if(buttonClick.Type == simdriver.Command){
 					if !state[localIp].Orders.isOrder(buttonClick){
-						selfassign_chan <- buttonClick
+						states[localIp].Orders.addOrder(buttonClick)
 						saveInternalOrder(buttonClick.Floor)
+						//Add to local state
 						states[localIp].Sequencenumber += 1
-						send_chan <- com.CreateClickEventMsg()//fix
+						send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
 					}
 				} else {
 					for _, state := range states {
@@ -151,26 +165,41 @@ func Run(
 					bestIp := localIp // Local elevator is default
 					shortestResponseTime := 99999.9 //Inf
 					for ip, state := range states{
-						if time := state.GetExpectedResponseTime(simdriver{buttonClick.Floor,buttonClick.Type}); time < shortestResponseTime {
+						if time := state.GetExpectedResponseTime(buttonClick; time < shortestResponseTime {
 							shortestResponseTime = time
 							bestIp = ip
 						}
 					}
 					if bestIp == localIp{
-						selfassign_chan <- simdriver{floor,btnType}
 						states[localIp].Sequencenumber += 1
-						send_chan <- com.CreateClickEventMsg()//fix
+						states[localIp].Orders.addOrder(buttonClick)
+						send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
 					} else {
-						send_chan <- com.CreateOrderAssignmentMsg()//fix
+						send_chan <- com.OrderAssignmentMsg{buttonClick, bestIp}
 					}
 
 				}
 			case sensorEvent := <-sensorEvent_chan:
-				// Oppdater state, inkrementer sekvensnummer
-				//
-				com.CreateSensorEventMsg()//fix
+				if(sensorEvent == -1 && !state.Moving){
+					elev_error_chan <- true
+					continue
+				}
+				states[localIp].Sequencenumber += 1
+				if sensorEvent == -1 {
+					send_chan <- com.SensorEventMsg{com.LeavingFloor, states[localIp], localIp}
+				} else {
+					states[localIp].LastPassedFloor = floor_reached
+					floor_reached <- sensorEvent
+				}
+			case moving := <-start_moving:
+				states[localIp].Moving = true
+			case floor := <-PassingFloor:
+				send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp], localIp}
 			case <-elev_error_chan:
-				// disconnect TCP
+				error_state = true
+				drop_conn_chan <- true
+				//Stop light on
+				//Remove remote elevators from states?
 		}
 	}
 }
