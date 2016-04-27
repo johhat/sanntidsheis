@@ -135,11 +135,11 @@ func Run(
 
 			readDirs <- readDirection{last_passed_floor, current_direction, isOrderBehind, reply_chan}
 			orderBehind := <-reply_chan
-			readOrders <- readOrder{simdriver.ClickEvent{last_passed_floor, current_direction.oppositeDirection().toBtnType()}, reply_chan}
+			readOrders <- readOrder{simdriver.ClickEvent{last_passed_floor, current_direction.OppositeDirection().toBtnType()}, reply_chan}
 			orderBackwardAtThisFloor := <-reply_chan
 
 			if orderBehind || orderBackwardAtThisFloor { //Ordre bakover
-				current_direction = current_direction.oppositeDirection()
+				current_direction = current_direction.OppositeDirection()
 			}
 
 		case doorOpen:
@@ -194,7 +194,7 @@ func (orders Orders) isOrderAhead(currentFloor int, direction Direction_t) bool 
 }
 
 func (orders Orders) isOrderBehind(currentFloor int, direction Direction_t) bool {
-	return orders.isOrderAhead(currentFloor, direction.oppositeDirection())
+	return orders.isOrderAhead(currentFloor, direction.OppositeDirection())
 }
 
 func (orders Orders) addOrder(order simdriver.ClickEvent) {
@@ -219,7 +219,7 @@ func (orders Orders) addOrder(order simdriver.ClickEvent) {
 	simdriver.SetBtnLamp(order.Floor, order.Type, true)
 }
 
-func (direction Direction_t) oppositeDirection() Direction_t {
+func (direction Direction_t) OppositeDirection() Direction_t {
 	if direction == Up {
 		return Down
 	} else {

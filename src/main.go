@@ -2,7 +2,10 @@ package main
 
 import (
 	"./networking"
-	"./networking/messages"
+	"./manager"
+	"./elevator"
+	"./simdriver"
+	"./com"
 )
 
 func main() {

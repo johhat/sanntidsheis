@@ -5,7 +5,7 @@ package main
 
 import (
 	"../elevator"
-	"../simdriver"
+	"../driver"
 	"fmt"
 	"time"
 )
@@ -19,10 +19,17 @@ func main() {
 	var completed_floor_chan = make(chan int)
 	var missed_deadline_chan = make(chan bool)
 	var floor_reached_chan = make(chan int)
+	var new_order_chan = make(chan driver.ClickEvent)
+	var new_direction_chan = make(chan elevator.Direction_t)
 
 	simdriver.Init(clickEvent_chan, sensorEvent_chan)
 	time.Sleep(5 * time.Millisecond)
-	go elevator.Run(completed_floor_chan, missed_deadline_chan, floor_reached_chan)
+	go elevator.Run(
+		completed_floor_chan,
+		missed_deadline_chan,
+		floor_reached_chan,
+		new_order_chan,
+		new_direction_chan)
 	go func(s_event, floor_reached chan int) {
 		for {
 			floor := <-s_event
