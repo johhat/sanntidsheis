@@ -3,12 +3,7 @@ package com
 type EventType int
 
 const (
-	//Order events
-	NewExternalOrder EventType = iota
-	NewInternalOrder
-
-	//Sensor events
-	PassingFloor
+	PassingFloor EventType = iota
 	DoorOpenedByInternalOrder
 	StoppingToFinishOrder
 	LeavingFloor
