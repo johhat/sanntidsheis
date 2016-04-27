@@ -104,7 +104,6 @@ func Run(
 				states[localIp] = tmp
 				send_chan <- com.SensorEventMsg{com.DoorClosed, states[localIp], localIp}
 			case connected := <- connected_chan:
-				fmt.Println("CONNECTED")
 				states[connected] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false, 0, false}
 				states[connected].Orders[simdriver.Up] = make(statetype.FloorOrders)
 				states[connected].Orders[simdriver.Down] = make(statetype.FloorOrders)
@@ -209,7 +208,6 @@ func Run(
 
 				}
 			case sensorEvent := <-sensorEvent_chan:
-				fmt.Println("Sensorevent",sensorEvent)
 				if(sensorEvent == -1 && !states[localIp].Moving){
 					elev_error_chan <- true
 					continue
@@ -230,7 +228,6 @@ func Run(
 					states[localIp] = tmp
 					
 				}
-				fmt.Println("Sensorevent exit",sensorEvent)
 			case <-start_moving:
 				tmp := states[localIp]
 				tmp.Moving = true

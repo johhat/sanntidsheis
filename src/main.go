@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"time"
 )
 
 func main() {
@@ -75,7 +76,7 @@ func main() {
 		simdriver.SetMotorDirection(simdriver.MotorStop)
 		log.Fatal("[FATAL]\tUser terminated program")
 	}()
-
+	time.sleep(500 * time.Millisecond)
 	networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected, disconnectFromNetwork, reconnectToNetwork)
 
 

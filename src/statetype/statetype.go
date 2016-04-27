@@ -28,14 +28,14 @@ const (
 
 func (orders Orderset) RestoreInternalOrders() {
 	for floor := 0; floor < simdriver.NumFloors; floor++ {
-		if _, err := os.Stat("/internalOrder" + strconv.Itoa(floor)); !os.IsNotExist(err) {
+		if _, err := os.Stat("internalOrder" + strconv.Itoa(floor)); !os.IsNotExist(err) {
 			orders[simdriver.Command][floor] = true
 		}
 	}
 }
 
 func SaveInternalOrder(floor int) {
-	_, err := os.Create("/internalOrder" + strconv.Itoa(floor))
+	_, err := os.Create("internalOrder" + strconv.Itoa(floor))
 	if err != nil {
 		fmt.Println(err)
 	}
