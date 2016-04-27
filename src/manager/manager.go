@@ -195,6 +195,7 @@ func Run(
 				bestIp := localIp                          // Local elevator is default
 				var shortestResponseTime float32 = 99999.9 //Inf
 				for ip, state := range states {
+					fmt.Println("IP:",ip)
 					if time := state.GetExpectedResponseTime(buttonClick); time < shortestResponseTime {
 						shortestResponseTime = time
 						bestIp = ip

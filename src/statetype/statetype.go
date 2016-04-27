@@ -154,6 +154,7 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 			if currentOrders.IsOrder(newOrder) {
 				responseTime += stopTime
 			} else {
+				fmt.Println("\tResponse time:",responseTime)
 				return
 			}
 		} else if currentOrders.IsOrderAhead(currentFloor, currentDirection) { //Ordre framover
