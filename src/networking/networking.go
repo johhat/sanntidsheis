@@ -78,9 +78,6 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	for {
 		select {
 		case msg := <-sendMsgChan:
-
-			log.Println("Sending TCP msg:", msg)
-
 			handleTcpSendMsg(msg, clients, tcpSendMsg, tcpBroadcastMsg)
 		case rawMsg := <-udpRecvMsg:
 			if networkModuleIsActive {
