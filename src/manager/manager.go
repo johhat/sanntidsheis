@@ -90,10 +90,18 @@ func Run(
 			case completed := <-completed_floor:
 				tmp := states[localIp]
 				tmp.Moving = false
+				tmp.DoorOpen = true
 				tmp.Orders.ClearOrders(completed)
+				simdriver.SetBtnLamp(completed, simdriver.Up, false)
+				simdriver.SetBtnLamp(completed, simdriver.Down, false)
+				simdriver.SetBtnLamp(completed, simdriver.Command, false)
 				states[localIp] = tmp
 				send_chan <- com.SensorEventMsg{com.StoppingToFinishOrder, states[localIp], localIp}
-
+			case <- door_closed_chan:
+				tmp := states[localIp]
+				tmp.DoorOpen = false
+				states[localIp] = tmp
+				send_chan <- com.SensorEventMsg{com.DoorClosed, states[localIp], localIp}
 			case connected := <- connected_chan:
 				states[connected] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false, 0, false}
 				states[connected].Orders[simdriver.Up] = make(statetype.FloorOrders)
@@ -162,7 +170,8 @@ func Run(
 				if(buttonClick.Type == simdriver.Command){
 					if !states[localIp].Orders.IsOrder(buttonClick){
 						states[localIp].Orders.AddOrder(buttonClick)
-						statetype.SaveInternalOrder(buttonClick.Floor)
+						simdriver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
+						//statetype.SaveInternalOrder(buttonClick.Floor)
 						//Add to local state
 						tmp := states[localIp]
 						tmp.SequenceNumber += 1
@@ -172,6 +181,7 @@ func Run(
 				} else {
 					for _, state := range states {
 						if state.Orders.IsOrder(buttonClick) {
+							fmt.Println("Order already exists:",buttonClick)
 							break //Order already exists
 						}
 					}
@@ -183,6 +193,7 @@ func Run(
 							bestIp = ip
 						}
 					}
+					fmt.Println("Best IP for order",buttonClick,"is",bestIp)
 					if bestIp == localIp{
 						tmp := states[localIp]
 						tmp.SequenceNumber += 1
@@ -192,6 +203,7 @@ func Run(
 					} else {
 						send_chan <- com.OrderAssignmentMsg{buttonClick, bestIp}
 					}
+					simdriver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
 
 				}
 			case sensorEvent := <-sensorEvent_chan:

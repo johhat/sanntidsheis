@@ -122,38 +122,19 @@ func (orders Orderset) ClearOrders(floor int){
 }
 
 func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (responseTime float32){
-	fmt.Println("Estimating times for new order on floor",newOrder.Floor,"of type",newOrder.Type)
 	if ((newOrder.Type == simdriver.Up) && (newOrder.Floor == simdriver.NumFloors-1)) || ((newOrder.Type == simdriver.Down) && (newOrder.Floor == 0)){
 		fmt.Println("Attempted to get response time of non-existing order type")
 		responseTime = -1
-		//bestCaseTime = -1
-		//worstCaseTime = -1
 		return
 	}
 	if state.Orders.IsOrder(newOrder){
 		fmt.Println("Order already exists")
 		responseTime = -1
-		//bestCaseTime = -1
-		//worstCaseTime = -1
 		return
 	}
-
-	//Among the possible destinations, find the floors closest and furthest away
-	var bestCaseFloor int
-	var worstCaseFloor int
-	if newOrder.Type == simdriver.Up {
-		worstCaseFloor = simdriver.NumFloors-1
-		bestCaseFloor = newOrder.Floor+1
-	} else {
-		worstCaseFloor = 0
-		bestCaseFloor = newOrder.Floor-1
-	}
-	fmt.Println("Best case floor:",bestCaseFloor,"Worst case floor:",worstCaseFloor)
 	
 	//Initialize variables
 	responseTime = 0
-	//bestCaseTime = 0
-	//worstCaseTime = 0
 
 	currentOrders := state.Orders
 	currentOrders.AddOrder(newOrder)
@@ -169,72 +150,27 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 	} else if state.DoorOpen {
 		responseTime += doorOpenPenalty
 	}
-	target := newOrder
-	caseOrders := make(Orderset)
-	caseOrders[simdriver.Down] = make(FloorOrders)
-	caseOrders[simdriver.Up] = make(FloorOrders)
-	caseOrders[simdriver.Command] = make(FloorOrders)
 
 	for{
 		if currentOrders[simdriver.Command][currentFloor] || currentOrders.IsOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection)}){
-			//fmt.Println("Stopping at floor",currentFloor)
 			currentOrders.ClearOrders(currentFloor)
-			if currentOrders.IsOrder(target){
-				switch target.Floor{
-				case bestCaseFloor:
-					//bestCaseTime += stopTime
-					//fmt.Println("Stop: Bestcasetime + 3")
-				case worstCaseFloor:
-					//worstCaseTime += stopTime
-					//fmt.Println("Stop: Worstcasetime + 3")
-				default:
-					responseTime += stopTime
-					//fmt.Println("Stop: Responsetime + 3")
-				}
+			if currentOrders.IsOrder(newOrder){
+				responseTime += stopTime
 			} else {
-				switch target.Floor{
-				case bestCaseFloor:
-					target = simdriver.ClickEvent{worstCaseFloor, simdriver.Command}
-					//worstCaseTime += responseTime + stopTime
-					//fmt.Println("Worstcasetime + responsetime + 3")
-					caseOrders.AddOrder(target)
-					DeepOrdersetCopy(caseOrders,currentOrders)
-					currentFloor = newOrder.Floor
-				case worstCaseFloor:
-					return
-				default:
-					target = simdriver.ClickEvent{bestCaseFloor, simdriver.Command}
-					//bestCaseTime += responseTime + stopTime
-					//fmt.Println("Bestcasetime + responsetime + 3")
-					DeepOrdersetCopy(currentOrders,caseOrders)
-					currentOrders.AddOrder(target)
-				}
+				return
 			}
     	} else if currentOrders.IsOrderAhead(currentFloor, currentDirection){ //Ordre framover
-    		switch target.Floor{
-			case bestCaseFloor:
-				//bestCaseTime += floorTravelTime
-				//fmt.Println("Move: Bestcasetime + 2")
-			case worstCaseFloor:
-				//worstCaseTime += floorTravelTime
-				//fmt.Println("Move: Worstcasetime + 2")
-			default:
-				responseTime += floorTravelTime
-				//fmt.Println("Move: Responsetime + 2")
-			}
+			responseTime += floorTravelTime
     		if currentDirection == elevator.Up{
     			currentFloor += 1
-    			//fmt.Println("Going up to",currentFloor)
     		} else {
     			currentFloor -= 1
-    			//fmt.Println("Going down to",currentFloor)
     		}
     	} else if currentOrders.IsOrderBehind(currentFloor, currentDirection) || currentOrders.IsOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection.OppositeDirection())}){ //Ordre bakover
     		currentDirection = currentDirection.OppositeDirection()
-    		//fmt.Println("Turning around")
     	} else {
     		//No orders left, to prevent erronous infinite loop this must be catched
-    		//fmt.Println("Stuck forever ...")
+    		fmt.Println("Stuck forever ...")
     	}
 	}
 

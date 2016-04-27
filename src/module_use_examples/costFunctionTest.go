@@ -21,16 +21,16 @@ import(
 func main(){
 	//Create test state
 	upOrders := statetype.FloorOrders{0:false , 1: false, 2: false}
-	downOrders := statetype.FloorOrders{1: false, 2: true, 3: false}
+	downOrders := statetype.FloorOrders{1: false, 2: false, 3: false}
 	CmdOrders := statetype.FloorOrders{0: false, 1: false, 2: false, 3: false}
 	orders := statetype.Orderset{
 		simdriver.Up: upOrders,
 		simdriver.Down: downOrders,
 		simdriver.Command: CmdOrders}
 	testState := statetype.State{
-		3, // Last passed floor
-		elevator.Down, // Defined direction
-		true, //moving
+		0, // Last passed floor
+		elevator.Up, // Defined direction
+		false, //moving
 		orders,
 		true, //valid
 		0, //Sequence number
@@ -40,9 +40,8 @@ func main(){
 	newOrder := simdriver.ClickEvent{3,simdriver.Down}
 
 	//Calculate times
-	response, best, worst := testState.GetExpectedResponseTime(newOrder)
+	response := testState.GetExpectedResponseTime(newOrder)
 	fmt.Println("Response time:",response)
-	fmt.Println("Best case:",best)
-	fmt.Println("Worst case:",worst)
+
 	
 }

@@ -24,7 +24,6 @@ func main() {
 	var door_closed_chan = make(chan bool)
 	var readDir_chan = make(chan elevator.ReadDirection)
 	var readOrder_chan = make(chan elevator.ReadOrder)
-	var deletes_chan = make(chan elevator.DeleteOp)
 	var networking_timeout = make(chan bool)
 	var start_moving_chan = make(chan bool)
 	var passing_floor_chan = make(chan bool)
@@ -48,20 +47,9 @@ func main() {
 		readDir_chan,
 		readOrder_chan,
 		start_moving_chan,
-		passing_floor_chan,
-		deletes_chan)
+		passing_floor_chan)
 
-	go networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected, disconnectFromNetwork, reconnectToNetwork)
-
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		simdriver.SetMotorDirection(simdriver.MotorStop)
-		log.Fatal("[FATAL]\tUser terminated program")
-	}()
-
-	manager.Run(
+	go manager.Run(
 		sendMsgChan,
 		recvMsgChan,
 		connected,
@@ -79,5 +67,16 @@ func main() {
 		disconnectFromNetwork,
 		reconnectToNetwork,
 		networking_timeout)
+
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		simdriver.SetMotorDirection(simdriver.MotorStop)
+		log.Fatal("[FATAL]\tUser terminated program")
+	}()
+
+	networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected, disconnectFromNetwork, reconnectToNetwork)
+
 
 }

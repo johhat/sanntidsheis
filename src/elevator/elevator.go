@@ -43,10 +43,6 @@ type ReadOrder struct {
 	Order simdriver.ClickEvent
 	Resp  chan bool
 }
-type DeleteOp struct {
-	Floor int
-	Resp  chan bool
-}
 
 func Run(
 	completed_floor 	chan<- int,
@@ -58,8 +54,7 @@ func Run(
 	readDirs			chan<- ReadDirection,
 	ReadOrders			chan<- ReadOrder,
 	start_moving		chan<- bool,
-	passingFloor_chan	chan<- bool,
-	deletes				chan<- DeleteOp) {
+	passingFloor_chan	chan<- bool) {
 
 	reply_chan := make(chan bool)
 
@@ -133,8 +128,6 @@ func Run(
 			simdriver.SetDoorOpenLamp(false)
 			state = atFloor
 			door_closed_chan <- true
-			deletes <- DeleteOp{last_passed_floor, reply_chan}
-			<-reply_chan
 		case movingBetween:
 			select {
 			case floor := <-floor_reached:
