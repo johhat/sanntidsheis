@@ -33,11 +33,12 @@ func Run(
 
 	//Initialize queue
 	states := make(map[string]statetype.State)
-	states[localIp] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false, 0, false}
+	states[localIp] = statetype.State{-1, elevator.GetCurrentDirection(), false, make(statetype.Orderset), false, 0, false}
 	states[localIp].Orders[simdriver.Up] = make(statetype.FloorOrders)
 	states[localIp].Orders[simdriver.Down] = make(statetype.FloorOrders)
 	states[localIp].Orders[simdriver.Command] = make(statetype.FloorOrders)
 	states[localIp].Orders.Init()
+
 
 	for {
 		select {
@@ -103,6 +104,7 @@ func Run(
 				states[localIp] = tmp
 				send_chan <- com.SensorEventMsg{com.DoorClosed, states[localIp], localIp}
 			case connected := <- connected_chan:
+				fmt.Println("CONNECTED")
 				states[connected] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false, 0, false}
 				states[connected].Orders[simdriver.Up] = make(statetype.FloorOrders)
 				states[connected].Orders[simdriver.Down] = make(statetype.FloorOrders)
@@ -207,21 +209,28 @@ func Run(
 
 				}
 			case sensorEvent := <-sensorEvent_chan:
+				fmt.Println("Sensorevent",sensorEvent)
 				if(sensorEvent == -1 && !states[localIp].Moving){
 					elev_error_chan <- true
 					continue
 				}
-				tmp := states[localIp]
-				tmp.SequenceNumber += 1
-				states[localIp] = tmp
 				if sensorEvent == -1 {
+					tmp := states[localIp]
+					tmp.SequenceNumber += 1
+					states[localIp] = tmp
 					send_chan <- com.SensorEventMsg{com.LeavingFloor, states[localIp], localIp}
 				} else {
 					tmp := states[localIp]
 					tmp.LastPassedFloor = sensorEvent
+					if !tmp.Valid {
+						tmp.Valid = true
+					} else {
+						floor_reached <- sensorEvent
+					}
 					states[localIp] = tmp
-					floor_reached <- sensorEvent
+					
 				}
+				fmt.Println("Sensorevent exit",sensorEvent)
 			case <-start_moving:
 				tmp := states[localIp]
 				tmp.Moving = true

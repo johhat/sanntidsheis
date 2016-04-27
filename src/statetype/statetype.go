@@ -43,7 +43,7 @@ func SaveInternalOrder(floor int) {
 
 func (orders Orderset) IsOrder(event simdriver.ClickEvent) bool {
 	if event.Floor < 0 || event.Floor > simdriver.NumFloors-1 {
-		fmt.Println("Attempted to check order for non-existing floor")
+		//fmt.Println("Attempted to check order for non-existing floor")
 		return false
 	} else if event.Type == simdriver.Up && event.Floor == simdriver.NumFloors-1 {
 		return false

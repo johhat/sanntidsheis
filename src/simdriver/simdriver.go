@@ -24,7 +24,7 @@ const (
 	NumBtnTypes  = 3
 	InvalidFloor = -1
 	MotorSpeed   = 2800
-	PollInterval = 2 * time.Millisecond
+	PollInterval = 1 * time.Millisecond
 )
 
 type BtnType int
@@ -83,7 +83,7 @@ func (direction MotorDirection) String() string {
 
 func poll(sensorEventChan chan int, clickEventChan chan ClickEvent) {
 
-	state = GetFloorSensorSignal()
+	state = -1
 	var isPressed [NumBtnTypes][NumFloors]bool
 
 	for {

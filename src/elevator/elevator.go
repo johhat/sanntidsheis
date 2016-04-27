@@ -44,6 +44,12 @@ type ReadOrder struct {
 	Resp  chan bool
 }
 
+var current_direction Direction_t = Up
+
+func GetCurrentDirection() Direction_t{
+	return current_direction
+}
+
 func Run(
 	completed_floor 	chan<- int,
 	elev_error		 	chan<- bool,
@@ -65,7 +71,6 @@ func Run(
 	door_timer.Stop()
 
 	state := atFloor
-	current_direction := Up
 	last_passed_floor := simdriver.GetCurrentFloor()
 	if last_passed_floor == -1 {
 		//Even though the driver initialized the elevator to a valid floor, it seems to be something wrong
