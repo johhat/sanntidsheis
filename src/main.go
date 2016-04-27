@@ -5,9 +5,10 @@ import (
 	"./manager"
 	"./elevator"
 	"./simdriver"
-	"./com"
 	"os"
 	"os/signal"
+	"log"
+	"./com"
 )
 
 func main() {
@@ -18,20 +19,20 @@ func main() {
 	var completed_floor_chan = make(chan int)
 	var elev_error_chan = make(chan bool)
 	var floor_reached_chan = make(chan int)
-	var new_order_chan = make(chan driver.ClickEvent)
+	var new_order_chan = make(chan simdriver.ClickEvent)
 	var new_direction_chan = make(chan elevator.Direction_t)
 	var door_closed_chan = make(chan bool)
-	var readDir_chan = make(chan 
-	var readOrders_chan = make(chan 
-	var deletes_chan = make(chan 
+	var readDir_chan = make(chan elevator.ReadDirection)
+	var readOrder_chan = make(chan elevator.ReadOrder)
+	var deletes_chan = make(chan elevator.DeleteOp)
 	var drop_conn_chan = make(chan bool)
 	var networking_timeout = make(chan bool)
 	var start_moving_chan = make(chan bool)
 	var passing_floor_chan = make(chan bool)
 	
 
-	var sendMsgChan = make(chan messages.Message)
-	var recvMsgChan = make(chan messages.Message)
+	var sendMsgChan = make(chan com.Message)
+	var recvMsgChan = make(chan com.Message)
 	var connected = make(chan string)
 	var disconnected = make(chan string)
 
@@ -39,13 +40,13 @@ func main() {
 
 	go elevator.Run(
 		completed_floor_chan,
-		missed_deadline_chan,
+		elev_error_chan,
 		floor_reached_chan,
 		new_order_chan,
 		new_direction_chan,
 		door_closed_chan,
-		readDirs_chan,
-		readOrders_chan,
+		readDir_chan,
+		readOrder_chan,
 		start_moving_chan,
 		passing_floor_chan,
 		deletes_chan)
@@ -56,7 +57,7 @@ func main() {
     signal.Notify(c, os.Interrupt)
     go func() {
         <- c
-        driver.MotorStop()
+        simdriver.SetMotorDirection(simdriver.MotorStop)
         log.Fatal("[FATAL]\tUser terminated program")
     }()
 

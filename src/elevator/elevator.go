@@ -29,23 +29,23 @@ const (
 type request_t int
 
 const (
-	isOrderAhead = iota
-	isOrderBehind
+	IsOrderAhead = iota
+	IsOrderBehind
 )
 
-type readDirection struct {
-	floor     int
-	direction Direction_t
-	request   request_t
-	resp      chan bool
+type ReadDirection struct {
+	Floor     int
+	Direction Direction_t
+	Request   request_t
+	Resp      chan bool
 }
-type readOrder struct {
-	order simdriver.ClickEvent
-	resp  chan bool
+type ReadOrder struct {
+	Order simdriver.ClickEvent
+	Resp  chan bool
 }
-type deleteOp struct {
-	floor int
-	resp  chan bool
+type DeleteOp struct {
+	Floor int
+	Resp  chan bool
 }
 
 func Run(
@@ -55,39 +55,13 @@ func Run(
 	new_order 			<-chan simdriver.ClickEvent,
 	new_direction 		chan<- Direction_t,
 	door_closed_chan	chan<- bool,
-	readDirs			chan<- readDirection,
-	readOrders			chan<- readOrder,
+	readDirs			chan<- ReadDirection,
+	ReadOrders			chan<- ReadOrder,
 	start_moving		chan<- bool,
 	passingFloor_chan	chan<- bool,
-	deletes				chan<- deleteOp) {
+	deletes				chan<- DeleteOp) {
 
 	reply_chan := make(chan bool)
-
-	/*go func() {
-		orders := make(Orders)
-		orders[simdriver.Up] = make(FloorOrders)
-		orders[simdriver.Down] = make(FloorOrders)
-		orders[simdriver.Command] = make(FloorOrders)
-		orders.Init()
-		for {
-			select {
-			case order := <-new_order:
-				orders.addOrder(order)
-			case readDir := <-readDirs:
-				switch readDir.request {
-				case isOrderAhead:
-					readDir.resp <- orders.isOrderAhead(readDir.floor, readDir.direction)
-				case isOrderBehind:
-					readDir.resp <- orders.isOrderBehind(readDir.floor, readDir.direction)
-				}
-			case readOrder := <-readOrders:
-				readOrder.resp <- orders.isOrder(readOrder.order)
-			case delete := <-deletes:
-				orders.clearOrders(delete.floor)
-				delete.resp <- true
-			}
-		}
-	}()*/
 
 	deadline_timer := time.NewTimer(deadline_period)
 	deadline_timer.Stop()
@@ -109,9 +83,9 @@ func Run(
 		switch state {
 		case atFloor:
 			//Noen vil av, eller på i riktig retning
-			readOrders <- readOrder{simdriver.ClickEvent{last_passed_floor, simdriver.Command}, reply_chan}
+			ReadOrders <- ReadOrder{simdriver.ClickEvent{last_passed_floor, simdriver.Command}, reply_chan}
 			internal0rderAtThisFloor := <-reply_chan
-			readOrders <- readOrder{simdriver.ClickEvent{last_passed_floor, current_direction.toBtnType()}, reply_chan}
+			ReadOrders <- ReadOrder{simdriver.ClickEvent{last_passed_floor, current_direction.toBtnType()}, reply_chan}
 			orderForwardAtThisFloor := <-reply_chan
 
 			if internal0rderAtThisFloor || orderForwardAtThisFloor {
@@ -125,7 +99,7 @@ func Run(
 				break
 			}
 
-			readDirs <- readDirection{last_passed_floor, current_direction, isOrderAhead, reply_chan}
+			readDirs <- ReadDirection{last_passed_floor, current_direction, IsOrderAhead, reply_chan}
 			orderAhead := <-reply_chan
 
 			if orderAhead {
@@ -145,9 +119,9 @@ func Run(
 				break
 			}
 
-			readDirs <- readDirection{last_passed_floor, current_direction, isOrderBehind, reply_chan}
+			readDirs <- ReadDirection{last_passed_floor, current_direction, IsOrderBehind, reply_chan}
 			orderBehind := <-reply_chan
-			readOrders <- readOrder{simdriver.ClickEvent{last_passed_floor, current_direction.OppositeDirection().toBtnType()}, reply_chan}
+			ReadOrders <- ReadOrder{simdriver.ClickEvent{last_passed_floor, current_direction.OppositeDirection().toBtnType()}, reply_chan}
 			orderBackwardAtThisFloor := <-reply_chan
 
 			if orderBehind || orderBackwardAtThisFloor {
@@ -155,11 +129,11 @@ func Run(
 			}
 
 		case doorOpen:
-			<-door_timer.C:
+			<-door_timer.C
 			simdriver.SetDoorOpenLamp(false)
 			state = atFloor
 			door_closed_chan <- true
-			deletes <- deleteOp{last_passed_floor, reply_chan}
+			deletes <- DeleteOp{last_passed_floor, reply_chan}
 			<-reply_chan
 		case movingBetween:
 			select {

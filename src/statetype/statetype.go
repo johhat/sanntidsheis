@@ -29,7 +29,7 @@ const(
 	doorOpenPenalty float32 = stopTime/2
 )
 
-func (orders Orderset) restoreInternalOrders(){
+func (orders Orderset) RestoreInternalOrders(){
 	for floor := 0; floor < simdriver.NumFloors; floor++ {
 		if _, err := os.Stat("/internalOrder"+strconv.Itoa(floor)); !os.IsNotExist(err) {
   			orders[simdriver.Command][floor] = true
@@ -37,11 +37,14 @@ func (orders Orderset) restoreInternalOrders(){
 	}
 }
 
-func saveInternalOrder(floor int){
-	f, err := os.Create("/internalOrder"+strconv.Itoa(floor))
+func SaveInternalOrder(floor int){
+	_, err := os.Create("/internalOrder"+strconv.Itoa(floor))
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
-func (orders Orderset) isOrder(event simdriver.ClickEvent) bool {
+func (orders Orderset) IsOrder(event simdriver.ClickEvent) bool {
 	if event.Floor < 0 || event.Floor > simdriver.NumFloors-1 {
 		fmt.Println("Attempted to check order for non-existing floor")
 		return false
@@ -53,7 +56,7 @@ func (orders Orderset) isOrder(event simdriver.ClickEvent) bool {
 	return orders[event.Type][event.Floor]
 }
 
-func (orders Orderset) isOrderAhead(currentFloor int, direction elevator.Direction_t) bool {
+func (orders Orderset) IsOrderAhead(currentFloor int, direction elevator.Direction_t) bool {
 	for _, buttonOrders := range orders{
 		for floor, isSet := range buttonOrders {
 			if (direction == elevator.Up) && (floor > currentFloor) && isSet {
@@ -66,8 +69,8 @@ func (orders Orderset) isOrderAhead(currentFloor int, direction elevator.Directi
 	return false
 }
 
-func (orders Orderset) isOrderBehind(currentFloor int, direction elevator.Direction_t) bool{
-	return orders.isOrderAhead(currentFloor, direction.OppositeDirection())
+func (orders Orderset) IsOrderBehind(currentFloor int, direction elevator.Direction_t) bool{
+	return orders.IsOrderAhead(currentFloor, direction.OppositeDirection())
 }
 
 func (orders Orderset) Init(){
@@ -86,7 +89,7 @@ func (orders Orderset) Init(){
 	}
 }
 
-func (orders Orderset) addOrder(order simdriver.ClickEvent){
+func (orders Orderset) AddOrder(order simdriver.ClickEvent){
 	switch(order.Type){
 	case simdriver.Up:
 		if order.Floor < 0 || order.Floor > simdriver.NumFloors-2 {
@@ -108,7 +111,7 @@ func (orders Orderset) addOrder(order simdriver.ClickEvent){
 	//simdriver.SetBtnLamp(order.Floor, order.Type, true)
 }
 
-func (orders Orderset) clearOrders(floor int){
+func (orders Orderset) ClearOrders(floor int){
 	if floor != 0 {
 		orders[simdriver.Down][floor] = false
 	}
@@ -123,15 +126,15 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 	if ((newOrder.Type == simdriver.Up) && (newOrder.Floor == simdriver.NumFloors-1)) || ((newOrder.Type == simdriver.Down) && (newOrder.Floor == 0)){
 		fmt.Println("Attempted to get response time of non-existing order type")
 		responseTime = -1
-		bestCaseTime = -1
-		worstCaseTime = -1
+		//bestCaseTime = -1
+		//worstCaseTime = -1
 		return
 	}
-	if state.Orders.isOrder(newOrder){
+	if state.Orders.IsOrder(newOrder){
 		fmt.Println("Order already exists")
 		responseTime = -1
-		bestCaseTime = -1
-		worstCaseTime = -1
+		//bestCaseTime = -1
+		//worstCaseTime = -1
 		return
 	}
 
@@ -149,11 +152,11 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 	
 	//Initialize variables
 	responseTime = 0
-	bestCaseTime = 0
-	worstCaseTime = 0
+	//bestCaseTime = 0
+	//worstCaseTime = 0
 
 	currentOrders := state.Orders
-	currentOrders.addOrder(newOrder)
+	currentOrders.AddOrder(newOrder)
 	currentDirection := state.Direction
 	currentFloor := state.LastPassedFloor
 	if state.Moving {
@@ -173,16 +176,16 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 	caseOrders[simdriver.Command] = make(FloorOrders)
 
 	for{
-		if currentOrders[simdriver.Command][currentFloor] || currentOrders.isOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection)}){
+		if currentOrders[simdriver.Command][currentFloor] || currentOrders.IsOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection)}){
 			//fmt.Println("Stopping at floor",currentFloor)
-			currentOrders.clearOrders(currentFloor)
-			if currentOrders.isOrder(target){
+			currentOrders.ClearOrders(currentFloor)
+			if currentOrders.IsOrder(target){
 				switch target.Floor{
 				case bestCaseFloor:
-					bestCaseTime += stopTime
+					//bestCaseTime += stopTime
 					//fmt.Println("Stop: Bestcasetime + 3")
 				case worstCaseFloor:
-					worstCaseTime += stopTime
+					//worstCaseTime += stopTime
 					//fmt.Println("Stop: Worstcasetime + 3")
 				default:
 					responseTime += stopTime
@@ -192,28 +195,28 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 				switch target.Floor{
 				case bestCaseFloor:
 					target = simdriver.ClickEvent{worstCaseFloor, simdriver.Command}
-					worstCaseTime += responseTime + stopTime
+					//worstCaseTime += responseTime + stopTime
 					//fmt.Println("Worstcasetime + responsetime + 3")
-					caseOrders.addOrder(target)
-					deepOrdersetCopy(caseOrders,currentOrders)
+					caseOrders.AddOrder(target)
+					DeepOrdersetCopy(caseOrders,currentOrders)
 					currentFloor = newOrder.Floor
 				case worstCaseFloor:
 					return
 				default:
 					target = simdriver.ClickEvent{bestCaseFloor, simdriver.Command}
-					bestCaseTime += responseTime + stopTime
+					//bestCaseTime += responseTime + stopTime
 					//fmt.Println("Bestcasetime + responsetime + 3")
-					deepOrdersetCopy(currentOrders,caseOrders)
-					currentOrders.addOrder(target)
+					DeepOrdersetCopy(currentOrders,caseOrders)
+					currentOrders.AddOrder(target)
 				}
 			}
-    	} else if currentOrders.isOrderAhead(currentFloor, currentDirection){ //Ordre framover
+    	} else if currentOrders.IsOrderAhead(currentFloor, currentDirection){ //Ordre framover
     		switch target.Floor{
 			case bestCaseFloor:
-				bestCaseTime += floorTravelTime
+				//bestCaseTime += floorTravelTime
 				//fmt.Println("Move: Bestcasetime + 2")
 			case worstCaseFloor:
-				worstCaseTime += floorTravelTime
+				//worstCaseTime += floorTravelTime
 				//fmt.Println("Move: Worstcasetime + 2")
 			default:
 				responseTime += floorTravelTime
@@ -226,7 +229,7 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
     			currentFloor -= 1
     			//fmt.Println("Going down to",currentFloor)
     		}
-    	} else if currentOrders.isOrderBehind(currentFloor, currentDirection) || currentOrders.isOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection.OppositeDirection())}){ //Ordre bakover
+    	} else if currentOrders.IsOrderBehind(currentFloor, currentDirection) || currentOrders.IsOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection.OppositeDirection())}){ //Ordre bakover
     		currentDirection = currentDirection.OppositeDirection()
     		//fmt.Println("Turning around")
     	} else {
@@ -247,7 +250,7 @@ func elevDirToDriverDir(dir elevator.Direction_t) simdriver.BtnType {
 	}
 }
 
-func deepOrdersetCopy(from Orderset, to Orderset) {
+func DeepOrdersetCopy(from Orderset, to Orderset) {
 	for btn,floorOrders := range from{
 		for floor, isSet := range floorOrders{
 			to[btn][floor] = isSet
@@ -255,7 +258,7 @@ func deepOrdersetCopy(from Orderset, to Orderset) {
 	}
 }
 
-func (oldState State) diff(newState State) (lastPassedFloor, direction, moving, orders, valid, dooropen bool) {
+func (oldState State) Diff(newState State) (lastPassedFloor, direction, moving, orders, valid, dooropen bool) {
 	if oldState.LastPassedFloor == newState.LastPassedFloor{
 		lastPassedFloor = true
 	}
@@ -274,15 +277,16 @@ func (oldState State) diff(newState State) (lastPassedFloor, direction, moving, 
 
 	orders = true
 	for btn, floorOrders := range oldState.Orders {
-		if _, ok := newState[btn]; !ok {
+		if _, ok := newState.Orders[btn]; !ok {
 			orders = false
 			return
 		}
 		for floor, isSet := range floorOrders{
-			if newIsSet, ok := newState[btn][floor]; !ok || newIsSet != isSet {
+			if newIsSet, ok := newState.Orders[btn][floor]; !ok || newIsSet != isSet {
 				orders = false
 				return
 			}
 		}
-	}	
+	}
+	return
 }

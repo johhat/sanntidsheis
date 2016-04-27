@@ -10,12 +10,12 @@ import (
 )
 
 func Run(
-	send_chan			chan<- messages.Message,
-	receive_chan		<-chan messages.Message,
+	send_chan			chan<- com.Message,
+	receive_chan		<-chan com.Message,
 	connected_chan		<-chan string,
 	disconnected_chan 	<-chan string,
-	readDir_chan		<-chan readDirection,
-	readOrder_chan		<-chan readOrder,
+	readDir_chan		<-chan elevator.ReadDirection,
+	readOrder_chan		<-chan elevator.ReadOrder,
 	completed_floor		<-chan int,
 	door_closed_chan	<-chan bool,
 	clickEvent_chan		<-chan simdriver.ClickEvent,
@@ -32,11 +32,11 @@ func Run(
 
 	//Initialize queue
 	states := make(map[string]statetype.State)
-	states[localIp] = State{-1, elevator.Up, false, make(statetype.Orderset), false}
-	states[localIp].orders[simdriver.Up] = make(statetype.FloorOrders)
-	states[localIp].orders[simdriver.Down] = make(statetype.FloorOrders)
-	states[localIp].orders[simdriver.Command] = make(statetype.FloorOrders)
-	states[localIp].orders.Init()
+	states[localIp] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false, 0, false}
+	states[localIp].Orders[simdriver.Up] = make(statetype.FloorOrders)
+	states[localIp].Orders[simdriver.Down] = make(statetype.FloorOrders)
+	states[localIp].Orders[simdriver.Command] = make(statetype.FloorOrders)
+	states[localIp].Orders.Init()
 
 	for {
 		select {
@@ -46,44 +46,59 @@ func Run(
 					if(msg.(com.OrderAssignmentMsg).Assignee != localIp){
 						fmt.Println("Manager was assigned order with wrong IP address")
 					} else {
-						states[localIp].Orders.addOrder(msg.(com.OrderAssignment).Button)
-						send_chan <- com.OrderEventMsg{msg.(com.OrderAssignment).Button, states[localIp], localIp}
+						states[localIp].Orders.AddOrder(msg.(com.OrderAssignmentMsg).Button)
+						send_chan <- com.OrderEventMsg{msg.(com.OrderAssignmentMsg).Button, states[localIp], localIp}
 					}
 				case com.OrderEventMsg:
 					//Sanity check av state-endring
-					states[msg.(com.OrderEventMsg).Sender].Orders.addOrder(msg.(com.OrderEventMsg).Button)
+					states[msg.(com.OrderEventMsg).Sender].Orders.AddOrder(msg.(com.OrderEventMsg).Button)
 					//Skru på knappelys hvis ordren er ekstern
 				case com.SensorEventMsg:
 					//Sanity check av state-endring
-					state[msg.(com.SensorEventMsg).Sender].LastPassedFloor = msg.(com.SensorEventMsg).NewState.LastPassedFloor
-					state[msg.(com.SensorEventMsg).Sender].Direction = msg.(com.SensorEventMsg).NewState.Direction
-					state[msg.(com.SensorEventMsg).Sender].Moving = msg.(com.SensorEventMsg).NewState.Moving
-					state[msg.(com.SensorEventMsg).Sender].SequenceNumber = msg.(com.SensorEventMsg).NewState.SequenceNumber
-					state[msg.(com.SensorEventMsg).Sender].DoorOpen = msg.(com.SensorEventMsg).NewState.DoorOpen
+					tmp := states[msg.(com.SensorEventMsg).Sender]
+					tmp.Direction = msg.(com.SensorEventMsg).NewState.Direction
+					tmp.LastPassedFloor = msg.(com.SensorEventMsg).NewState.LastPassedFloor
+					tmp.Moving = msg.(com.SensorEventMsg).NewState.Moving
+					tmp.SequenceNumber = msg.(com.SensorEventMsg).NewState.SequenceNumber
+					tmp.DoorOpen = msg.(com.SensorEventMsg).NewState.DoorOpen
+					states[msg.(com.SensorEventMsg).Sender] = tmp
 				case com.InitialStateMsg:
 					//Sanity check av state-endring
-					state[msg.(com.InitialStateMsg).Sender].LastPassedFloor = msg.(com.InitialStateMsg).NewState.LastPassedFloor
-					state[msg.(com.InitialStateMsg).Sender].Direction = msg.(com.InitialStateMsg).NewState.Direction
-					state[msg.(com.InitialStateMsg).Sender].Moving = msg.(com.InitialStateMsg).NewState.Moving
-					state[msg.(com.InitialStateMsg).Sender].SequenceNumber = msg.(com.InitialStateMsg).NewState.SequenceNumber
-					state[msg.(com.InitialStateMsg).Sender].DoorOpen = msg.(com.InitialStateMsg).NewState.DoorOpen
+					tmp := states[msg.(com.InitialStateMsg).Sender]
+					tmp.LastPassedFloor = msg.(com.InitialStateMsg).NewState.LastPassedFloor
+					tmp.Direction = msg.(com.InitialStateMsg).NewState.Direction
+					tmp.Moving = msg.(com.InitialStateMsg).NewState.Moving
+					tmp.SequenceNumber = msg.(com.InitialStateMsg).NewState.SequenceNumber
+					tmp.DoorOpen = msg.(com.InitialStateMsg).NewState.DoorOpen
+					tmp.Valid = true
+					states[msg.(com.InitialStateMsg).Sender] = tmp
+					statetype.DeepOrdersetCopy(msg.(com.InitialStateMsg).NewState.Orders,states[msg.(com.InitialStateMsg).Sender].Orders)
 				default:
 					fmt.Println("Manager received invalid message")
 				}
 			case readOrder := <-readOrder_chan:
-				readOrder.resp <- states[localIp].Orders.isOrder(readOrder.order)
+				readOrder.Resp <- states[localIp].Orders.IsOrder(readOrder.Order)
 			case readDir := <-readDir_chan:
-				switch(readDir.request){
-            	case isOrderAhead:
-            		readDir.resp <- states[localIp].Orders.isOrderAhead(readDir.floor, readDir.direction)
-            	case isOrderBehind:
-            		readDir.resp <- states[localIp].Orders.isOrderBehind(readDir.floor, readDir.direction)
+				switch(readDir.Request){
+            	case elevator.IsOrderAhead:
+            		readDir.Resp <- states[localIp].Orders.IsOrderAhead(readDir.Floor, readDir.Direction)
+            	case elevator.IsOrderBehind:
+            		readDir.Resp <- states[localIp].Orders.IsOrderBehind(readDir.Floor, readDir.Direction)
             	}
 
 			case completed := <-completed_floor:
-				states[localIp].Moving = false
-				states[localIp].Orders.clearOrders(completed.floor)
-				send_chan <- SensorEventMsg{com.StoppingToFinishOrder, states[localIp], localIp}
+				tmp := states[localIp]
+				tmp.Moving = false
+				tmp.Orders.ClearOrders(completed)
+				states[localIp] = tmp
+				send_chan <- com.SensorEventMsg{com.StoppingToFinishOrder, states[localIp], localIp}
+
+			case connected := <- connected_chan:
+				states[connected] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false, 0, false}
+				states[connected].Orders[simdriver.Up] = make(statetype.FloorOrders)
+				states[connected].Orders[simdriver.Down] = make(statetype.FloorOrders)
+				states[connected].Orders[simdriver.Command] = make(statetype.FloorOrders)
+				send_chan <- com.InitialStateMsg{states[localIp], localIp}
 
 			case disconnected := <-disconnected_chan:
 
@@ -94,7 +109,7 @@ func Run(
 					if err != nil {
 						fmt.Println(err)
 					}
-					if remoteIsHighest && (ip != disconnected) {
+					if remoteIpHighest && (ip != disconnected) {
 						shouldRedistribute = false
 						break
 					}
@@ -108,9 +123,9 @@ func Run(
 								if isSet {
 									// Find the elevator with shortest expected response time
 									bestIp := localIp // Local elevator is default
-									shortestResponseTime := 99999.9 //Inf
+									var shortestResponseTime float32 = 99999.9 //Inf
 									for ip, state := range states{
-										if time := state.GetExpectedResponseTime(simdriver{floor,btnType}); time < shortestResponseTime {
+										if time := state.GetExpectedResponseTime(simdriver.ClickEvent{floor,btnType}); time < shortestResponseTime {
 											shortestResponseTime = time
 											bestIp = ip
 										}
@@ -118,61 +133,60 @@ func Run(
 									// Send order to the best elevator
 									fmt.Println("Reassigning order floor",floor,",type",btnType,"to ip",bestIp)
 									if bestIp == localIp{
-										states[localIp].Sequencenumber += 1
-										states[localIp].Orders.addOrder(simdriver{floor,btnType})
-										send_chan <- com.OrderEventMsg{simdriver{floor,btnType}, states[localIp], localIp}
+										tmp := states[localIp]
+										tmp.SequenceNumber += 1
+										tmp.Orders.AddOrder(simdriver.ClickEvent{floor,btnType})
+										states[localIp] = tmp
+										send_chan <- com.OrderEventMsg{simdriver.ClickEvent{floor,btnType}, states[localIp], localIp}
 									} else {
-										send_chan <- com.OrderAssignmentMsg{simdriver{floor,btnType},bestIp}
+										send_chan <- com.OrderAssignmentMsg{simdriver.ClickEvent{floor,btnType},bestIp}
 									}
 								}
 							}
 						}
 					}
 				}
-				delete(states,ip)
+				delete(states,disconnected)
 
-			case ip := <-newElevator:
-				states[ip] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false}
-				states[ip].orders[simdriver.Up] = make(statetype.FloorOrders)
-				states[ip].orders[simdriver.Down] = make(statetype.FloorOrders)
-				states[ip].orders[simdriver.Command] = make(statetype.FloorOrders)
-				send_chan <- com.InitialStateMsg{states[localIp], localIp}
-
-			case buttonClick := clickEvent_chan: //Må endre til å inkludere stoppknapp
+			case buttonClick := <- clickEvent_chan: //Må endre til å inkludere stoppknapp
 				//Hvis stoppknapp {
-					//if error_state {
+					if error_state {
 						//Init på nytt?
 						//Restart heartbeats
 						//Lytt til heartbeats
 						//error_state = false
-					//}	
+					}	
 					//continue
 				//}
 				if(buttonClick.Type == simdriver.Command){
-					if !state[localIp].Orders.isOrder(buttonClick){
-						states[localIp].Orders.addOrder(buttonClick)
-						saveInternalOrder(buttonClick.Floor)
+					if !states[localIp].Orders.IsOrder(buttonClick){
+						states[localIp].Orders.AddOrder(buttonClick)
+						statetype.SaveInternalOrder(buttonClick.Floor)
 						//Add to local state
-						states[localIp].Sequencenumber += 1
+						tmp := states[localIp]
+						tmp.SequenceNumber += 1
+						states[localIp] = tmp
 						send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
 					}
 				} else {
 					for _, state := range states {
-						if state.Orders.isOrder(buttonClick) {
+						if state.Orders.IsOrder(buttonClick) {
 							break //Order already exists
 						}
 					}
 					bestIp := localIp // Local elevator is default
-					shortestResponseTime := 99999.9 //Inf
+					var shortestResponseTime float32 = 99999.9 //Inf
 					for ip, state := range states{
-						if time := state.GetExpectedResponseTime(buttonClick; time < shortestResponseTime {
+						if time := state.GetExpectedResponseTime(buttonClick); time < shortestResponseTime {
 							shortestResponseTime = time
 							bestIp = ip
 						}
 					}
 					if bestIp == localIp{
-						states[localIp].Sequencenumber += 1
-						states[localIp].Orders.addOrder(buttonClick)
+						tmp := states[localIp]
+						tmp.SequenceNumber += 1
+						tmp.Orders.AddOrder(buttonClick)
+						states[localIp] = tmp
 						send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
 					} else {
 						send_chan <- com.OrderAssignmentMsg{buttonClick, bestIp}
@@ -180,20 +194,26 @@ func Run(
 
 				}
 			case sensorEvent := <-sensorEvent_chan:
-				if(sensorEvent == -1 && !state.Moving){
+				if(sensorEvent == -1 && !states[localIp].Moving){
 					elev_error_chan <- true
 					continue
 				}
-				states[localIp].Sequencenumber += 1
+				tmp := states[localIp]
+				tmp.SequenceNumber += 1
+				states[localIp] = tmp
 				if sensorEvent == -1 {
 					send_chan <- com.SensorEventMsg{com.LeavingFloor, states[localIp], localIp}
 				} else {
-					states[localIp].LastPassedFloor = floor_reached
+					tmp := states[localIp]
+					tmp.LastPassedFloor = sensorEvent
+					states[localIp] = tmp
 					floor_reached <- sensorEvent
 				}
-			case moving := <-start_moving:
-				states[localIp].Moving = true
-			case floor := <-PassingFloor:
+			case <-start_moving:
+				tmp := states[localIp]
+				tmp.Moving = true
+				states[localIp] = tmp
+			case <-PassingFloor:
 				send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp], localIp}
 			case <-elev_error_chan:
 				error_state = true
@@ -206,17 +226,17 @@ func Run(
 
 func sanityCheck(oldState statetype.State, newState statetype.State, event com.EventType) bool {
 	//Check sequence number
-	if newState.Sequencenumber != (oldState.Sequencenumber + 1) {
-		fmt.Println("Received state message with out of order sequence number. Old:",oldState.Sequencenumber,"New:",newState.Sequencenumber)
-		if newState.Sequencenumber > (oldState.Sequencenumber + 1){
+	if newState.SequenceNumber != (oldState.SequenceNumber + 1) {
+		fmt.Println("Received state message with out of order sequence number. Old:",oldState.SequenceNumber,"New:",newState.SequenceNumber)
+		if newState.SequenceNumber > (oldState.SequenceNumber + 1){
 			//Skipped message
-		} else if newState.Sequencenumber < (oldState.Sequencenumber + 1){
+		} else if newState.SequenceNumber < (oldState.SequenceNumber + 1){
 			//Received skipped message
 		}
 	}
 
 	//Check if old state + event = new state
-	lastPassedFloorEqual, directionEqual, movingEqual, ordersEqual, validEqual, dooropenEqual := oldState.diff(newState)
+	lastPassedFloorEqual, directionEqual, movingEqual, ordersEqual, validEqual, dooropenEqual := oldState.Diff(newState)
 	switch event {
 	case com.NewExternalOrder:
 		if(lastPassedFloorEqual && directionEqual && movingEqual && !ordersEqual && validEqual && dooropenEqual){
@@ -251,4 +271,6 @@ func sanityCheck(oldState statetype.State, newState statetype.State, event com.E
 		return false
 	case com.StoppingToFinishOrder:
 	case com.LeavingFloor:
+	}
+	return false
 }
