@@ -134,6 +134,7 @@ func sendToIp(ip string, clients map[net.Conn]clientChans, message []byte) {
 			select {
 			case channels.sendMsg <- message:
 			case <-channels.pipeClosed:
+				//TODO: Signalisering til nettverksmodulen om at melding ikke ble sendt?
 				log.Println("SendToIp send failed - pipe closed. Ip:", ip)
 			}
 			return
@@ -148,6 +149,7 @@ func broadcast(clients map[net.Conn]clientChans, message []byte) {
 			select {
 			case chs.sendMsg <- message:
 			case <-chs.pipeClosed:
+				//TODO: Signalisering til nettverksmodulen at melding ikke ble sendt?
 				log.Println("Broadcast to one recvr failed - pipe closed.")
 			}
 		}(chs)

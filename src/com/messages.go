@@ -16,6 +16,7 @@ type SendMsgRequest struct {
 
 type Message interface {
 	MsgType() string
+	GetSenderIp() string
 }
 
 type DirectedMessage interface {
@@ -28,13 +29,17 @@ type DirectedMessage interface {
 //
 
 type OrderEventMsg struct {
-	Button   driver.ClickEvent //Etasje og opp/ned
+	Button   driver.ClickEvent
 	NewState s.State
 	Sender   string
 }
 
 func (m OrderEventMsg) MsgType() string {
 	return "OrderEventMsg"
+}
+
+func (m OrderEventMsg) GetSenderIp() string {
+	return m.Sender
 }
 
 //
@@ -51,6 +56,10 @@ func (m SensorEventMsg) MsgType() string {
 	return "SensorEventMsg"
 }
 
+func (m SensorEventMsg) GetSenderIp() string {
+	return m.Sender
+}
+
 //
 // Initial s.State Msg implementation
 //
@@ -62,6 +71,10 @@ type InitialStateMsg struct {
 
 func (m InitialStateMsg) MsgType() string {
 	return "InitialStateMsg"
+}
+
+func (m InitialStateMsg) GetSenderIp() string {
+	return m.Sender
 }
 
 //
@@ -84,6 +97,10 @@ func (m Heartbeat) MsgType() string {
 	return "Heartbeat"
 }
 
+func (m Heartbeat) GetSenderIp() string {
+	return m.Sender
+}
+
 //
 // Order Assignment Directed msg implementation
 //
@@ -96,6 +113,10 @@ type OrderAssignmentMsg struct {
 
 func (m OrderAssignmentMsg) MsgType() string {
 	return "OrderAssignmentMsg"
+}
+
+func (m OrderAssignmentMsg) GetSenderIp() string {
+	return m.Sender
 }
 
 func (m OrderAssignmentMsg) GetRecieverIp() string {
@@ -114,6 +135,10 @@ type ReadConfirmationMsg struct {
 
 func (m ReadConfirmationMsg) MsgType() string {
 	return "ReadConfirmationMsg"
+}
+
+func (m ReadConfirmationMsg) GetSenderIp() string {
+	return m.Sender
 }
 
 func (m ReadConfirmationMsg) GetRecieverIp() string {

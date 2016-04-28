@@ -2,28 +2,48 @@ package networking
 
 import (
 	"../com"
+	"./tcp"
 	"log"
 	"time"
 )
 
 const readConfirmationTimeout = 1 * time.Second
 
-type msgAndHash struct {
-	msg              com.Message
-	readConfirmation chan bool
-	hash             string
+type expectReadConfirmationData struct {
+	msg                  com.Message
+	readConfirmationChan chan bool
+	hash                 string
 }
 
-type awaitingConfirmationTuple struct {
-	msg              com.Message
-	readConfirmation chan bool
-	read             chan bool
+type awaitingConfirmationData struct {
+	msg                  com.Message
+	readConfirmationChan chan bool
+	read                 chan bool
 }
 
-func readConfirmationHandler(awaitConfirmation <-chan msgAndHash, registerConfirmationHash <-chan string) {
+func sendReadConfirmationHandler(outgoingReadConfs <-chan com.ReadConfirmationMsg,
+	tcpSendMsg chan<- tcp.RawMessage) {
+
+	for msg := range outgoingReadConfs {
+
+		w := com.WrapMessage(msg)
+
+		data, err := w.Encode()
+
+		if err != nil {
+			log.Println("Error when encoding read confirmation msg. Err:", err, ". Message:", msg)
+			continue
+		}
+
+		tcpSendMsg <- tcp.RawMessage{Data: data, Ip: msg.Reciever}
+	}
+}
+
+func readConfirmationHandler(awaitConfirmation <-chan expectReadConfirmationData,
+	registerConfirmationHash <-chan string) {
 
 	//TODO: Lag et map for meldinger som har timet ut der meldinger slettes etter ett min?
-	awaitingConfirmationMap := make(map[string]awaitingConfirmationTuple)
+	awaitingConfirmationMap := make(map[string]awaitingConfirmationData)
 	timeout := make(chan string)
 
 	for {
@@ -32,24 +52,26 @@ func readConfirmationHandler(awaitConfirmation <-chan msgAndHash, registerConfir
 
 			localReadConfirmChan := make(chan bool)
 
-			awaitingConfirmationMap[elem.hash] = awaitingConfirmationTuple{
-				msg:              elem.msg,
-				readConfirmation: elem.readConfirmation,
-				read:             localReadConfirmChan,
+			awaitingConfirmationMap[elem.hash] = awaitingConfirmationData{
+				msg:                  elem.msg,
+				readConfirmationChan: elem.readConfirmationChan,
+				read:                 localReadConfirmChan,
 			}
 
 			go func() {
 				select {
 				case <-time.After(readConfirmationTimeout):
 					timeout <- elem.hash
-					if elem.readConfirmation != nil {
-						elem.readConfirmation <- false
-						close(elem.readConfirmation)
+					//Send resultat på kanalen manager har sendt til network-modul
+					if elem.readConfirmationChan != nil {
+						elem.readConfirmationChan <- false
+						close(elem.readConfirmationChan)
 					}
 				case <-localReadConfirmChan:
-					if elem.readConfirmation != nil {
-						elem.readConfirmation <- true
-						close(elem.readConfirmation) //TODO: Check if this is ok if we have several listeners
+					//Send resultat på kanalen manager har sendt til network-modul
+					if elem.readConfirmationChan != nil {
+						elem.readConfirmationChan <- true
+						close(elem.readConfirmationChan) //TODO: Check if this is ok if we have several listeners
 					}
 				}
 			}()

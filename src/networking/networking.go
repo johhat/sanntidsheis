@@ -66,15 +66,21 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	tcpConnectionFailure := make(chan string)
 	tcpDial := make(chan string)
 
+	expectReadConfirmationChan := make(chan expectReadConfirmationData)
+	recvReadConfirmationChan := make(chan string)
+	sendReadConfirmationChan := make(chan com.ReadConfirmationMsg)
+
 	//TODO: Bryt tilkobling, Avbryt lytting og ikke gjør dial dersom frakoblet
+	go readConfirmationHandler(expectReadConfirmationChan, recvReadConfirmationChan)
 	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, setTcpOperationMode, localIp)
 	go tcpSendHeartbeats(tcpBroadcastMsg, stopTcpHeartbeats)
-	go handleTcpMsgRecv(tcpRecvMsg, recvMsgChan)
+	go handleTcpMsgRecv(tcpRecvMsg, recvMsgChan, recvReadConfirmationChan, sendReadConfirmationChan)
+	go sendReadConfirmationHandler(sendReadConfirmationChan, tcpSendMsg)
 
 	for {
 		select {
 		case msg := <-sendMsgChan:
-			handleTcpSendMsg(msg, clients, tcpSendMsg, tcpBroadcastMsg)
+			handleTcpSendMsg(msg, clients, tcpSendMsg, tcpBroadcastMsg, expectReadConfirmationChan)
 		case rawMsg := <-udpRecvMsg:
 			if networkModuleIsActive {
 				handleUdpMsgRecv(rawMsg, clients, tcpDial, localIp)
@@ -122,9 +128,11 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	}
 }
 
-func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpSendMsg chan<- tcp.RawMessage, tcpBroadcastMsg chan<- []byte) {
-
-	//TODO: Add messages != to HB and RC to map of sent messages
+func handleTcpSendMsg(msg com.Message,
+	clients map[string]connectionStatus,
+	tcpSendMsg chan<- tcp.RawMessage,
+	tcpBroadcastMsg chan<- []byte,
+	expectReadConfirmationChan chan<- expectReadConfirmationData) {
 
 	switch msg.(type) {
 	case com.DirectedMessage:
@@ -148,7 +156,11 @@ func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpS
 			return
 		}
 
-		//TODO: Add to hash map of sent messages awaiting read confirmation, if != HB or RC
+		expectReadConfirmationChan <- expectReadConfirmationData{
+			msg:                  msg,
+			readConfirmationChan: nil, //TODO: This should be a chan (or chans) from manager
+			hash:                 w.MsgHash,
+		}
 
 		tcpSendMsg <- tcp.RawMessage{Data: data, Ip: ip}
 	case com.Message:
@@ -161,30 +173,36 @@ func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpS
 			return
 		}
 
-		//TODO: Add to hash map of sent messages awaiting read confirmation, if != HB or RC
-
 		tcpBroadcastMsg <- data
 	default:
 		log.Println("Error in handleTcpSendMsg: Message does not satisfy any relevant message interface")
 	}
 }
 
-func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- com.Message) {
+func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage,
+	recvMsgChan chan<- com.Message,
+	recvReadConfirmation chan<- string,
+	sendReadConfirmationChan chan<- com.ReadConfirmationMsg) {
 
 	heartbeats := make(map[string]int)
 
 	for rawMsg := range tcpRecvMsg {
 		//TODO: Use hash, m, hash, err :=
-		m, _, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+		m, hash, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 		if err == nil {
 			switch m.(type) {
 			case com.Heartbeat:
 				registerHeartbeat(heartbeats, m.(com.Heartbeat).HeartbeatNum, rawMsg.Ip, "TCP")
 			case com.ReadConfirmationMsg:
-				//TODO: remove msg from map
-				log.Println("Recieved read confirmation for msg:", m.(com.ReadConfirmationMsg).Hash)
+				recvReadConfirmation <- m.(com.ReadConfirmationMsg).Hash
+			case com.DirectedMessage:
+				sendReadConfirmationChan <- com.ReadConfirmationMsg{
+					Hash:     hash,
+					Reciever: m.GetSenderIp(),
+					Sender:   localIp,
+				}
+				recvMsgChan <- m
 			default:
-				//TODO: Send read confirmation to sender
 				recvMsgChan <- m
 			}
 		} else {
