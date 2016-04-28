@@ -5,6 +5,11 @@ import (
 	s "../statetype"
 )
 
+type SendMsgRequest struct {
+	Msg              Message
+	ReadConfirmation chan bool
+}
+
 //
 // Msg interfaces
 //
@@ -86,6 +91,7 @@ func (m Heartbeat) MsgType() string {
 type OrderAssignmentMsg struct {
 	Button   driver.ClickEvent
 	Assignee string
+	Sender   string
 }
 
 func (m OrderAssignmentMsg) MsgType() string {
@@ -102,8 +108,8 @@ func (m OrderAssignmentMsg) GetRecieverIp() string {
 
 type ReadConfirmationMsg struct {
 	Hash     string
-	Sender   string
 	Reciever string
+	Sender   string
 }
 
 func (m ReadConfirmationMsg) MsgType() string {

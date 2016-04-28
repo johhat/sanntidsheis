@@ -155,7 +155,7 @@ func Run(
 									states[localIp] = tmp
 									send_chan <- com.OrderEventMsg{driver.ClickEvent{floor, btnType}, states[localIp], localIp}
 								} else {
-									send_chan <- com.OrderAssignmentMsg{driver.ClickEvent{floor, btnType}, bestIp}
+									send_chan <- com.OrderAssignmentMsg{driver.ClickEvent{floor, btnType}, bestIp, localIp}
 								}
 							}
 						}
@@ -214,7 +214,7 @@ func Run(
 					states[localIp] = tmp
 					send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
 				} else {
-					send_chan <- com.OrderAssignmentMsg{buttonClick, bestIp}
+					send_chan <- com.OrderAssignmentMsg{buttonClick, bestIp, localIp}
 				}
 				driver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
 

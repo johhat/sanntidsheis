@@ -74,6 +74,7 @@ func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Me
 	case "OrderAssignmentMsg":
 		temp := OrderAssignmentMsg{}
 		err = json.Unmarshal(*msgJSON, &temp)
+		temp.Sender = senderIp
 		m = temp
 	default:
 		return nil, errors.New("Error in decode - type field not known")
