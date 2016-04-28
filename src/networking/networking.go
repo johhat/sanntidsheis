@@ -124,6 +124,8 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 
 func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpSendMsg chan<- tcp.RawMessage, tcpBroadcastMsg chan<- []byte) {
 
+	//TODO: Add messages != to HB and RC to map of sent messages
+
 	switch msg.(type) {
 	case com.DirectedMessage:
 		directedMsg := msg.(com.DirectedMessage)
@@ -146,6 +148,8 @@ func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpS
 			return
 		}
 
+		//TODO: Add to hash map of sent messages awaiting read confirmation, if != HB or RC
+
 		tcpSendMsg <- tcp.RawMessage{Data: data, Ip: ip}
 	case com.Message:
 		w := com.WrapMessage(msg)
@@ -157,59 +161,11 @@ func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpS
 			return
 		}
 
+		//TODO: Add to hash map of sent messages awaiting read confirmation, if != HB or RC
+
 		tcpBroadcastMsg <- data
 	default:
 		log.Println("Error in handleTcpSendMsg: Message does not satisfy any relevant message interface")
-	}
-}
-
-func tcpSendHeartbeats(tcpBroadcastMsg chan<- []byte, quit <-chan bool) {
-
-	tcpHeartbeatnum := 0
-	tcpHeartbeatTick := time.Tick(tcpHeartbeatInterval)
-
-	for {
-		select {
-		case <-tcpHeartbeatTick:
-			m := com.CreateHeartbeat(tcpHeartbeatnum)
-			w := com.WrapMessage(m)
-
-			data, err := w.Encode()
-
-			if err != nil {
-				log.Println("Error when encoding Heartbeat. Err:", err, ". Message:", m)
-			}
-
-			tcpBroadcastMsg <- data
-			tcpHeartbeatnum++
-		case <-quit:
-			return
-		}
-	}
-}
-
-func udpSendHeartbeats(udpBroadcastMsg chan<- []byte, quit <-chan bool) {
-
-	udpHeartbeatNum := 0
-	udpHeatbeatTick := time.Tick(udpHeartbeatInterval)
-
-	for {
-		select {
-		case <-udpHeatbeatTick:
-			m := com.CreateHeartbeat(udpHeartbeatNum)
-			w := com.WrapMessage(m)
-
-			data, err := w.Encode()
-
-			if err != nil {
-				log.Println("Error when encoding Heartbeat. Err:", err, ". Message:", m)
-			}
-
-			udpBroadcastMsg <- data
-			udpHeartbeatNum++
-		case <-quit:
-			return
-		}
 	}
 }
 
@@ -218,12 +174,17 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- com.Mes
 	heartbeats := make(map[string]int)
 
 	for rawMsg := range tcpRecvMsg {
-		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+		//TODO: Use hash, m, hash, err :=
+		m, _, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 		if err == nil {
 			switch m.(type) {
 			case com.Heartbeat:
 				registerHeartbeat(heartbeats, m.(com.Heartbeat).HeartbeatNum, rawMsg.Ip, "TCP")
+			case com.ReadConfirmationMsg:
+				//TODO: remove msg from map
+				log.Println("Recieved read confirmation for msg:", m.(com.ReadConfirmationMsg).Hash)
 			default:
+				//TODO: Send read confirmation to sender
 				recvMsgChan <- m
 			}
 		} else {
@@ -232,33 +193,12 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- com.Mes
 	}
 }
 
-func registerHeartbeat(heartbeats map[string]int, heartbeatNum int, sender string, connectionType string) {
-
-	prev, ok := heartbeats[sender]
-
-	if !ok {
-		heartbeats[sender] = heartbeatNum
-		return
-	} else {
-		heartbeats[sender] = heartbeatNum
-	}
-
-	switch {
-	case prev > heartbeatNum:
-		log.Printf("Delayed %s heartbeat from %s. Previous HB: %v Current HB: %v \n", connectionType, sender, prev, heartbeatNum)
-	case prev == heartbeatNum:
-		log.Printf("Duplicate %s heartbeat from %s. Previous HB: %v Current HB: %v \n", connectionType, sender, prev, heartbeatNum)
-	case prev+1 != heartbeatNum:
-		log.Printf("Missing %s heartbeat(s) from %s. Previous HB: %v Current HB: %v \n", connectionType, sender, prev, heartbeatNum)
-	}
-}
-
 func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
 
 	heartbeats := make(map[string]int) //Wrapped in closure in place of static variable
 
 	return func(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
-		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+		m, _, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
 		if err != nil {
 			log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))

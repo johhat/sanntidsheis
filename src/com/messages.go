@@ -95,3 +95,21 @@ func (m OrderAssignmentMsg) MsgType() string {
 func (m OrderAssignmentMsg) GetRecieverIp() string {
 	return m.Assignee
 }
+
+//
+// Read confirmation Directed msg implementation
+//
+
+type ReadConfirmationMsg struct {
+	Hash     string
+	Sender   string
+	Reciever string
+}
+
+func (m ReadConfirmationMsg) MsgType() string {
+	return "ReadConfirmationMsg"
+}
+
+func (m ReadConfirmationMsg) GetRecieverIp() string {
+	return m.Reciever
+}

@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"math/rand"
+	"strconv"
+	"time"
 )
-
-//
-// Message wrapper used to convert messages to and from JSON
-//
 
 type wrappedMessage struct {
 	Msg     Message
 	MsgType string
+	MsgHash string
 }
 
 func (wrapped wrappedMessage) Encode() ([]byte, error) {
@@ -20,7 +20,23 @@ func (wrapped wrappedMessage) Encode() ([]byte, error) {
 }
 
 func WrapMessage(message Message) wrappedMessage {
-	w := wrappedMessage{Msg: message, MsgType: message.MsgType()}
+
+	var hash string
+	data, err := json.Marshal(message)
+
+	if err != nil {
+		log.Println("Msg encode for hashing failed. Err:", err, ". Using fallback")
+		hash = GetHashString([]byte(time.Now().String() + strconv.Itoa(rand.Int())))
+	} else {
+		hash = GetHashString(data)
+	}
+
+	w := wrappedMessage{
+		Msg:     message,
+		MsgType: message.MsgType(),
+		MsgHash: hash,
+	}
+
 	return w
 }
 
@@ -30,6 +46,16 @@ func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Me
 	var m Message
 
 	switch msgType {
+	case "Heartbeat":
+		temp := Heartbeat{}
+		err = json.Unmarshal(*msgJSON, &temp)
+		temp.Sender = senderIp
+		m = temp
+	case "ReadConfirmationMsg":
+		temp := ReadConfirmationMsg{}
+		err = json.Unmarshal(*msgJSON, &temp)
+		temp.Sender = senderIp
+		m = temp
 	case "OrderEventMsg":
 		temp := OrderEventMsg{}
 		err = json.Unmarshal(*msgJSON, &temp)
@@ -49,11 +75,6 @@ func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Me
 		temp := OrderAssignmentMsg{}
 		err = json.Unmarshal(*msgJSON, &temp)
 		m = temp
-	case "Heartbeat":
-		temp := Heartbeat{}
-		err = json.Unmarshal(*msgJSON, &temp)
-		temp.Sender = senderIp
-		m = temp
 	default:
 		return nil, errors.New("Error in decode - type field not known")
 	}
@@ -61,7 +82,7 @@ func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Me
 	return m, err
 }
 
-func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
+func DecodeWrappedMessage(data []byte, senderIp string) (Message, string, error) {
 
 	var err error
 
@@ -70,19 +91,25 @@ func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
 
 	if err != nil {
 		log.Println("Error when decoding to tempmap. Err:", err, ". Data:", data)
-		return nil, err
+		return nil, "", err
 	}
 
 	msgTypeJSON, msgTypeOk := tempMap["MsgType"]
 
 	if !msgTypeOk {
-		return nil, errors.New("Missing message type field")
+		return nil, "", errors.New("Missing message type field")
 	}
 
 	msgJSON, msgOk := tempMap["Msg"]
 
 	if !msgOk {
-		return nil, errors.New("Missing message contents field")
+		return nil, "", errors.New("Missing message contents field")
+	}
+
+	msgHashJSON, msgHashOk := tempMap["MsgHash"]
+
+	if !msgHashOk {
+		return nil, "", errors.New("Missing message hash field")
 	}
 
 	var msgType string
@@ -90,7 +117,15 @@ func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
 
 	if err != nil {
 		log.Println("Error when decoding msgType. Err:", err)
-		return nil, err
+		return nil, "", err
+	}
+
+	var msgHash string
+	err = json.Unmarshal(*msgHashJSON, &msgHash)
+
+	if err != nil {
+		log.Println("Error when decoding msgHash. Err:", err)
+		return nil, "", err
 	}
 
 	var m Message
@@ -101,5 +136,5 @@ func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
 		log.Println("Error when decoding msg contents. Err: ", err)
 	}
 
-	return m, err
+	return m, msgHash, err
 }
