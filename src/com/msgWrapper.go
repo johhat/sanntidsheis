@@ -51,11 +51,6 @@ func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Me
 		err = json.Unmarshal(*msgJSON, &temp)
 		temp.Sender = senderIp
 		m = temp
-	case "ReadConfirmationMsg":
-		temp := ReadConfirmationMsg{}
-		err = json.Unmarshal(*msgJSON, &temp)
-		temp.Sender = senderIp
-		m = temp
 	case "OrderEventMsg":
 		temp := OrderEventMsg{}
 		err = json.Unmarshal(*msgJSON, &temp)
