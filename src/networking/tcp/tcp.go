@@ -50,6 +50,7 @@ func (c client) RecieveFrom(ch chan<- RawMessage) <-chan bool {
 			case <-c.chs.pipeClosed:
 			}
 			close(signalReturn)
+			log.Println("End of RecieveFrom from", c.ip)
 		}()
 
 		reader := bufio.NewReader(c.conn)
@@ -80,6 +81,7 @@ func (c *client) SendTo() <-chan bool {
 			case <-c.chs.pipeClosed:
 			}
 			close(signalReturn)
+			log.Println("End of SendTo from", c.ip)
 		}()
 
 		var b bytes.Buffer
@@ -134,7 +136,6 @@ func sendToIp(ip string, clients map[net.Conn]clientChans, message []byte) {
 			select {
 			case channels.sendMsg <- message:
 			case <-channels.pipeClosed:
-				//TODO: Signalisering til nettverksmodulen om at melding ikke ble sendt?
 				log.Println("SendToIp send failed - pipe closed. Ip:", ip)
 			}
 			return
@@ -149,7 +150,6 @@ func broadcast(clients map[net.Conn]clientChans, message []byte) {
 			select {
 			case chs.sendMsg <- message:
 			case <-chs.pipeClosed:
-				//TODO: Signalisering til nettverksmodulen at melding ikke ble sendt?
 				log.Println("Broadcast to one recvr failed - pipe closed.")
 			}
 		}(channels)
@@ -157,6 +157,8 @@ func broadcast(clients map[net.Conn]clientChans, message []byte) {
 }
 
 func handleConnection(connection net.Conn, recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- client) {
+
+	//TODO: Være sikker på at man unngår minnelekkasje ved at chs.disconnect ikke stenges
 
 	client := client{
 		ip:   getRemoteIp(connection),
