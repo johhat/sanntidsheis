@@ -167,7 +167,7 @@ func Run(
 									}
 								}
 								// Send order to the best elevator
-								fmt.Println("Reassigning order floor", floor, ",type", btnType, "to ip", bestIp)
+								fmt.Println("\033[34m"+"Manager: Reassigning order floor", floor, ",type", btnType, "to ip", bestIp, "\033[0m")
 								if bestIp == localIp {
 									tmp := states[localIp]
 									tmp.SequenceNumber += 1
@@ -211,7 +211,7 @@ func Run(
 				exists := false
 				for _, state := range states {
 					if state.Orders.IsOrder(buttonClick) {
-						fmt.Println("Order already exists:", buttonClick)
+						fmt.Println("\033[34m"+"Order already exists:", buttonClick, "\033[0m")
 						exists = true
 						break
 					}
@@ -219,6 +219,7 @@ func Run(
 				if exists {
 					break
 				}
+				fmt.Println("\033[34m"+"Manager: New", buttonClick, "\033[0m")
 				bestIp := localIp                          // Local elevator is default
 				var shortestResponseTime float32 = 99999.9 //Inf
 				for ip, state := range states {
@@ -228,7 +229,7 @@ func Run(
 						bestIp = ip
 					}
 				}
-				fmt.Println("Best IP for order", buttonClick, "is", bestIp)
+				fmt.Println("Best IP for", buttonClick, "is", bestIp)
 				if bestIp == localIp {
 					tmp := states[localIp]
 					tmp.SequenceNumber += 1

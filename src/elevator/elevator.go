@@ -44,7 +44,7 @@ func Run(
 		//Run init again or crash the program?
 	}
 
-	passingFloor := true
+	passingFloor := false
 
 	for {
 		switch state {
