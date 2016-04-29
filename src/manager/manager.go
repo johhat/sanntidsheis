@@ -71,10 +71,10 @@ func Run(
 				//Sanity check av state-endring
 				tmp := states[msg.Sender]
 				if msg.Type == com.StoppingToFinishOrder {
-					tmp.Orders.ClearOrders(msg.NewState.LastPassedFloor)
 					driver.SetBtnLamp(msg.NewState.LastPassedFloor, driver.Up, false)
 					driver.SetBtnLamp(msg.NewState.LastPassedFloor, driver.Down, false)
 				}
+				statetype.DeepOrdersetCopy(msg.NewState.Orders, tmp.Orders)
 				tmp.Direction = msg.NewState.Direction
 				tmp.LastPassedFloor = msg.NewState.LastPassedFloor
 				tmp.Moving = msg.NewState.Moving
