@@ -115,9 +115,9 @@ func handleMessages(sendMsg <-chan RawMessage,
 	for {
 		select {
 		case rawMsg := <-sendMsg:
-			go sendToIp(rawMsg.Ip, clients, rawMsg.Data)
+			sendToIp(rawMsg.Ip, clients, rawMsg.Data)
 		case msg := <-broadcastMsg:
-			go broadcast(clients, msg)
+			broadcast(clients, msg)
 		case client := <-addClient:
 			clients[client.conn] = client.chs
 			tcpConnected <- client.ip
@@ -144,7 +144,7 @@ func sendToIp(ip string, clients map[net.Conn]clientChans, message []byte) {
 }
 
 func broadcast(clients map[net.Conn]clientChans, message []byte) {
-	for _, chs := range clients {
+	for _, channels := range clients {
 		go func(chs clientChans) {
 			select {
 			case chs.sendMsg <- message:
@@ -152,7 +152,7 @@ func broadcast(clients map[net.Conn]clientChans, message []byte) {
 				//TODO: Signalisering til nettverksmodulen at melding ikke ble sendt?
 				log.Println("Broadcast to one recvr failed - pipe closed.")
 			}
-		}(chs)
+		}(channels)
 	}
 }
 

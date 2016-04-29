@@ -38,7 +38,7 @@ func Run(
 	door_timer.Stop()
 
 	state := atFloor
-	last_passed_floor := driver.GetCurrentFloor()
+	last_passed_floor := driver.GetFloorSensorSignal()
 	if last_passed_floor == -1 {
 		//Even though the driver initialized the elevator to a valid floor, it seems to be something wrong
 		//Run init again or crash the program?

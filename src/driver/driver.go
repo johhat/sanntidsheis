@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-var state int
-
 const (
 	NumFloors    = 4
 	NumBtnTypes  = 3
@@ -17,13 +15,9 @@ const (
 	PollInterval = 1 * time.Millisecond
 )
 
-func GetCurrentFloor() int {
-	return state
-}
-
 func pollFloorSensor(sensorEventChan chan int) {
 
-	state = -1
+	state := -1
 
 	for {
 		sensorSignal := GetFloorSensorSignal()
