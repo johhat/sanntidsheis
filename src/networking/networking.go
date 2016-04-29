@@ -168,7 +168,7 @@ func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- com.Mes
 	heartbeats := make(map[string]int)
 
 	for rawMsg := range tcpRecvMsg {
-		m, _, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 		if err == nil {
 			switch m.(type) {
 			case com.Heartbeat:
@@ -187,7 +187,7 @@ func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, clients map[string]conne
 	heartbeats := make(map[string]int) //Wrapped in closure in place of static variable
 
 	return func(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
-		m, _, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
 		if err != nil {
 			log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))
