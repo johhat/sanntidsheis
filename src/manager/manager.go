@@ -83,6 +83,10 @@ func Run(
 				states[msg.Sender] = tmp
 			case com.InitialStateMsg:
 				//Sanity check av state-endring
+				if states[msg.Sender].Valid {
+					break
+				}
+
 				fmt.Println("\033[34m"+"Manager: received InitialStateMsg from", msg.Sender, "\033[0m")
 				tmp := states[msg.Sender]
 				tmp.LastPassedFloor = msg.NewState.LastPassedFloor
