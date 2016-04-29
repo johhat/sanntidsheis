@@ -9,10 +9,18 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"time"
 )
 
 func main() {
+
+	go func() {
+		for {
+			log.Println("\033[33m"+"Number of active goroutines:", runtime.NumGoroutine(), "\033[0m")
+			<-time.Tick(5 * time.Second)
+		}
+	}()
 
 	clickEvent_chan := make(chan driver.ClickEvent)
 	sensorEvent_chan := make(chan int)
