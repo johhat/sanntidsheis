@@ -21,7 +21,6 @@ func Run(
 	completed_floor chan<- int,
 	elev_error chan<- bool,
 	floor_reached <-chan int,
-	new_order <-chan driver.ClickEvent,
 	new_direction chan<- Direction_t,
 	door_closed_chan chan<- bool,
 	readDirs chan<- ReadDirection,
@@ -97,6 +96,7 @@ func Run(
 			if orderBehind || orderBackwardAtThisFloor {
 				fmt.Println("\033[31m" + "Elevator: Changing direction" + "\033[0m")
 				current_direction = current_direction.OppositeDirection()
+				new_direction <- current_direction
 			}
 
 		case doorOpen:

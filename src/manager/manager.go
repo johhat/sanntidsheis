@@ -27,6 +27,7 @@ func Run(
 	sensorEvent_chan <-chan int,
 	floor_reached chan<- int,
 	start_moving <-chan bool,
+	new_direction_chan <-chan elevator.Direction_t,
 	PassingFloor <-chan bool,
 	elev_error_chan chan bool,
 	disconnectFromNetwork chan<- bool,
@@ -279,6 +280,10 @@ func Run(
 			fmt.Println("\033[34m" + "Manager: Starting to move" + "\033[0m")
 			tmp := states[localIp]
 			tmp.Moving = true
+			states[localIp] = tmp
+		case direction := <-new_direction_chan:
+			tmp := states[localIp]
+			tmp.Direction = direction
 			states[localIp] = tmp
 		case <-PassingFloor:
 			fmt.Println("\033[34m" + "Manager: Passing floor" + "\033[0m")

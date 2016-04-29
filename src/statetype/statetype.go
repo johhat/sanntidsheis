@@ -161,7 +161,7 @@ func (state State) GetExpectedResponseTime(newOrder driver.ClickEvent) (response
 			currentOrders.ClearOrders(currentFloor)
 			if currentOrders.IsOrder(newOrder) {
 				responseTime += stopTime
-				fmt.Printf("-> Stopping")
+				fmt.Printf("-> Stopping ")
 			} else {
 				fmt.Println("\n\tResponse time:", responseTime, "\033[0m")
 				return
@@ -170,14 +170,14 @@ func (state State) GetExpectedResponseTime(newOrder driver.ClickEvent) (response
 			responseTime += floorTravelTime
 			if currentDirection == elevator.Up {
 				currentFloor += 1
-				fmt.Printf("-> Move up")
+				fmt.Printf("-> Move up ")
 			} else {
 				currentFloor -= 1
-				fmt.Printf("-> Move down")
+				fmt.Printf("-> Move down ")
 			}
 		} else if currentOrders.IsOrderBehind(currentFloor, currentDirection) || currentOrders.IsOrder(driver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection.OppositeDirection())}) { //Ordre bakover
 			currentDirection = currentDirection.OppositeDirection()
-			fmt.Printf("-> Turn around")
+			fmt.Printf("-> Turn around ")
 		} else {
 			//No orders left, to prevent erronous infinite loop this must be catched
 			fmt.Println("Stuck forever ...")

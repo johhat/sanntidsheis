@@ -28,7 +28,6 @@ func main() {
 	completed_floor_chan := make(chan int)
 	elev_error_chan := make(chan bool)
 	floor_reached_chan := make(chan int)
-	new_order_chan := make(chan driver.ClickEvent)
 	new_direction_chan := make(chan elevator.Direction_t)
 	door_closed_chan := make(chan bool)
 	readDir_chan := make(chan elevator.ReadDirection)
@@ -50,7 +49,6 @@ func main() {
 		completed_floor_chan,
 		elev_error_chan,
 		floor_reached_chan,
-		new_order_chan,
 		new_direction_chan,
 		door_closed_chan,
 		readDir_chan,
@@ -71,6 +69,7 @@ func main() {
 		sensorEvent_chan,
 		floor_reached_chan,
 		start_moving_chan,
+		new_direction_chan,
 		passing_floor_chan,
 		elev_error_chan,
 		disconnectFromNetwork,
