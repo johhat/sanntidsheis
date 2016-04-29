@@ -55,6 +55,7 @@ func Run(
 					fmt.Println("Manager was assigned order with wrong IP address")
 					break
 				}
+				fmt.Println("Received assignment:", msg.Button)
 				states[localIp].Orders.AddOrder(msg.Button)
 				driver.SetBtnLamp(msg.Button.Floor, msg.Button.Type, true)
 				send_chan <- com.OrderEventMsg{msg.Button, states[localIp], localIp}
@@ -239,6 +240,7 @@ func Run(
 
 			}
 		case sensorEvent := <-sensorEvent_chan:
+			fmt.Println("Sensorevent:", sensorEvent)
 			if sensorEvent == -1 && !states[localIp].Moving {
 				elev_error_chan <- true
 				continue
@@ -255,6 +257,7 @@ func Run(
 					tmp.Valid = true
 				} else {
 					floor_reached <- sensorEvent
+					fmt.Println("Floor reached:", sensorEvent)
 				}
 				states[localIp] = tmp
 
@@ -264,6 +267,7 @@ func Run(
 			tmp.Moving = true
 			states[localIp] = tmp
 		case <-PassingFloor:
+			fmt.Println("Passing floor")
 			send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp], localIp}
 		case <-elev_error_chan:
 			error_state = true

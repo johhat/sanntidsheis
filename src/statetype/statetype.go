@@ -148,21 +148,26 @@ func (state State) GetExpectedResponseTime(newOrder driver.ClickEvent) (response
 		responseTime += doorOpenPenalty
 	}
 
+	fmt.Printf("\nSequence: ")
+
 	for {
 		if currentOrders[driver.Command][currentFloor] || currentOrders.IsOrder(driver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection)}) {
 			currentOrders.ClearOrders(currentFloor)
 			if currentOrders.IsOrder(newOrder) {
 				responseTime += stopTime
+				fmt.Printf("Stopping - ")
 			} else {
-				fmt.Println("\tResponse time:", responseTime)
+				fmt.Println("\n\tResponse time:", responseTime)
 				return
 			}
 		} else if currentOrders.IsOrderAhead(currentFloor, currentDirection) { //Ordre framover
 			responseTime += floorTravelTime
 			if currentDirection == elevator.Up {
 				currentFloor += 1
+				fmt.Printf("Move up - ")
 			} else {
 				currentFloor -= 1
+				fmt.Printf("Move down - ")
 			}
 		} else if currentOrders.IsOrderBehind(currentFloor, currentDirection) || currentOrders.IsOrder(driver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection.OppositeDirection())}) { //Ordre bakover
 			currentDirection = currentDirection.OppositeDirection()
