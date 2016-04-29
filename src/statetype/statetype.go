@@ -197,6 +197,27 @@ func DeepOrdersetCopy(from Orderset, to Orderset) {
 	}
 }
 
+func (source State) CreateCopy() (stateCopy State) {
+	stateCopy = State{
+		source.LastPassedFloor,
+		source.Direction,
+		source.Moving,
+		make(Orderset),
+		source.Valid,
+		source.SequenceNumber,
+		source.DoorOpen}
+	stateCopy.Orders[driver.Up] = make(FloorOrders)
+	stateCopy.Orders[driver.Down] = make(FloorOrders)
+	stateCopy.Orders[driver.Command] = make(FloorOrders)
+
+	for btn, floorOrders := range source.Orders {
+		for floor, isSet := range floorOrders {
+			stateCopy.Orders[btn][floor] = isSet
+		}
+	}
+	return
+}
+
 func (oldState State) Diff(newState State) (lastPassedFloor, direction, moving, orders, valid, dooropen bool) {
 	if oldState.LastPassedFloor == newState.LastPassedFloor {
 		lastPassedFloor = true

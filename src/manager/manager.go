@@ -58,7 +58,7 @@ func Run(
 				fmt.Println("Received assignment:", msg.Button)
 				states[localIp].Orders.AddOrder(msg.Button)
 				driver.SetBtnLamp(msg.Button.Floor, msg.Button.Type, true)
-				send_chan <- com.OrderEventMsg{msg.Button, states[localIp], localIp}
+				send_chan <- com.OrderEventMsg{msg.Button, states[localIp].CreateCopy(), localIp}
 
 			case com.OrderEventMsg:
 				//Sanity check av state-endring
@@ -121,19 +121,19 @@ func Run(
 			driver.SetBtnLamp(completed, driver.Down, false)
 			driver.SetBtnLamp(completed, driver.Command, false)
 			states[localIp] = tmp
-			send_chan <- com.SensorEventMsg{com.StoppingToFinishOrder, states[localIp], localIp}
+			send_chan <- com.SensorEventMsg{com.StoppingToFinishOrder, states[localIp].CreateCopy(), localIp}
 		case <-door_closed_chan:
 			tmp := states[localIp]
 			tmp.DoorOpen = false
 			states[localIp] = tmp
-			send_chan <- com.SensorEventMsg{com.DoorClosed, states[localIp], localIp}
+			send_chan <- com.SensorEventMsg{com.DoorClosed, states[localIp].CreateCopy(), localIp}
 		case connected := <-connected_chan:
 			states[connected] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false, 0, false}
 			states[connected].Orders[driver.Up] = make(statetype.FloorOrders)
 			states[connected].Orders[driver.Down] = make(statetype.FloorOrders)
 			states[connected].Orders[driver.Command] = make(statetype.FloorOrders)
 			fmt.Println("\033[34m"+"Manager: sending InitialStateMsg to", connected, "\033[0m")
-			send_chan <- com.InitialStateMsg{states[localIp], localIp}
+			send_chan <- com.InitialStateMsg{states[localIp].CreateCopy(), localIp}
 
 		case disconnected := <-disconnected_chan:
 
@@ -180,7 +180,7 @@ func Run(
 									tmp.SequenceNumber += 1
 									tmp.Orders.AddOrder(driver.ClickEvent{floor, btnType})
 									states[localIp] = tmp
-									send_chan <- com.OrderEventMsg{driver.ClickEvent{floor, btnType}, states[localIp], localIp}
+									send_chan <- com.OrderEventMsg{driver.ClickEvent{floor, btnType}, states[localIp].CreateCopy(), localIp}
 								} else {
 									send_chan <- com.OrderAssignmentMsg{driver.ClickEvent{floor, btnType}, bestIp, localIp}
 									unconfirmedOrders[unconfirmedOrder{driver.ClickEvent{floor, btnType}, bestIp}] = true
@@ -211,7 +211,7 @@ func Run(
 					tmp := states[localIp]
 					tmp.SequenceNumber += 1
 					states[localIp] = tmp
-					send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
+					send_chan <- com.OrderEventMsg{buttonClick, states[localIp].CreateCopy(), localIp}
 					fmt.Println("\033[34m"+"Manager: New internal order at floor", buttonClick.Floor, "\033[0m")
 				}
 			} else {
@@ -242,7 +242,7 @@ func Run(
 					tmp.SequenceNumber += 1
 					tmp.Orders.AddOrder(buttonClick)
 					states[localIp] = tmp
-					send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
+					send_chan <- com.OrderEventMsg{buttonClick, states[localIp].CreateCopy(), localIp}
 					driver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
 				} else {
 					send_chan <- com.OrderAssignmentMsg{buttonClick, bestIp, localIp}
@@ -260,7 +260,7 @@ func Run(
 				tmp := states[localIp]
 				tmp.SequenceNumber += 1
 				states[localIp] = tmp
-				send_chan <- com.SensorEventMsg{com.LeavingFloor, states[localIp], localIp}
+				send_chan <- com.SensorEventMsg{com.LeavingFloor, states[localIp].CreateCopy(), localIp}
 			} else {
 				tmp := states[localIp]
 				tmp.LastPassedFloor = sensorEvent
@@ -278,7 +278,7 @@ func Run(
 			states[localIp] = tmp
 		case <-PassingFloor:
 			fmt.Println("\033[34m" + "Manager: Passing floor" + "\033[0m")
-			send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp], localIp}
+			send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp].CreateCopy(), localIp}
 		case <-elev_error_chan:
 			error_state = true
 			disconnectFromNetwork <- true
