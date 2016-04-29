@@ -83,6 +83,7 @@ func Run(
 				states[msg.Sender] = tmp
 			case com.InitialStateMsg:
 				//Sanity check av state-endring
+				fmt.Println("\033[34m"+"Manager: received InitialStateMsg from", msg.Sender, "\033[0m")
 				tmp := states[msg.Sender]
 				tmp.LastPassedFloor = msg.NewState.LastPassedFloor
 				tmp.Direction = msg.NewState.Direction
@@ -127,6 +128,7 @@ func Run(
 			states[connected].Orders[driver.Up] = make(statetype.FloorOrders)
 			states[connected].Orders[driver.Down] = make(statetype.FloorOrders)
 			states[connected].Orders[driver.Command] = make(statetype.FloorOrders)
+			fmt.Println("\033[34m"+"Manager: sending InitialStateMsg to", connected, "\033[0m")
 			send_chan <- com.InitialStateMsg{states[localIp], localIp}
 
 		case disconnected := <-disconnected_chan:
