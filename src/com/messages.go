@@ -5,11 +5,6 @@ import (
 	s "../statetype"
 )
 
-type SendMsgRequest struct {
-	Msg              Message
-	ReadConfirmation chan bool
-}
-
 //
 // Msg interfaces
 //

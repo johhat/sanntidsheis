@@ -12,7 +12,7 @@ import (
 
 const (
 	tcpListenPort = ":6000"
-	readTimeout   = 10 * time.Second
+	readTimeout   = 1 * time.Second
 )
 
 type TcpOperationMode int

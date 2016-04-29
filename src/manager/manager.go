@@ -9,6 +9,11 @@ import (
 	"fmt"
 )
 
+type unconfirmedOrder struct {
+	Button   driver.ClickEvent
+	Reciever string
+}
+
 func Run(
 	send_chan chan<- com.Message,
 	receive_chan <-chan com.Message,
@@ -18,7 +23,7 @@ func Run(
 	readOrder_chan <-chan elevator.ReadOrder,
 	completed_floor <-chan int,
 	door_closed_chan <-chan bool,
-	clickEvent_chan <-chan driver.ClickEvent,
+	clickEvent_chan chan driver.ClickEvent,
 	sensorEvent_chan <-chan int,
 	floor_reached chan<- int,
 	start_moving <-chan bool,
@@ -31,6 +36,8 @@ func Run(
 	localIp := networking.GetLocalIp()
 	error_state := false
 
+	unconfirmedOrders := make(map[unconfirmedOrder]bool)
+
 	//Initialize queue
 	states := make(map[string]statetype.State)
 	states[localIp] = statetype.State{-1, elevator.GetCurrentDirection(), false, make(statetype.Orderset), false, 0, false}
@@ -42,45 +49,47 @@ func Run(
 	for {
 		select {
 		case msg := <-receive_chan:
-			switch msg.(type) {
+			switch msg := msg.(type) {
 			case com.OrderAssignmentMsg:
-				if msg.(com.OrderAssignmentMsg).Assignee != localIp {
+				if msg.Assignee != localIp {
 					fmt.Println("Manager was assigned order with wrong IP address")
-				} else {
-					states[localIp].Orders.AddOrder(msg.(com.OrderAssignmentMsg).Button)
-					driver.SetBtnLamp(msg.(com.OrderAssignmentMsg).Button.Floor, msg.(com.OrderAssignmentMsg).Button.Type, true)
-					send_chan <- com.OrderEventMsg{msg.(com.OrderAssignmentMsg).Button, states[localIp], localIp}
+					break
 				}
+				states[localIp].Orders.AddOrder(msg.Button)
+				driver.SetBtnLamp(msg.Button.Floor, msg.Button.Type, true)
+				send_chan <- com.OrderEventMsg{msg.Button, states[localIp], localIp}
+
 			case com.OrderEventMsg:
 				//Sanity check av state-endring
-				states[msg.(com.OrderEventMsg).Sender].Orders.AddOrder(msg.(com.OrderEventMsg).Button)
-				if msg.(com.OrderEventMsg).Button.Type != driver.Command {
-					driver.SetBtnLamp(msg.(com.OrderEventMsg).Button.Floor, msg.(com.OrderEventMsg).Button.Type, true)
+				delete(unconfirmedOrders, unconfirmedOrder{msg.Button, msg.Sender})
+				states[msg.Sender].Orders.AddOrder(msg.Button)
+				if msg.Button.Type != driver.Command {
+					driver.SetBtnLamp(msg.Button.Floor, msg.Button.Type, true)
 				}
 			case com.SensorEventMsg:
 				//Sanity check av state-endring
-				if msg.(com.SensorEventMsg).Type == com.StoppingToFinishOrder {
-					driver.SetBtnLamp(msg.(com.SensorEventMsg).NewState.LastPassedFloor, driver.Up, false)
-					driver.SetBtnLamp(msg.(com.SensorEventMsg).NewState.LastPassedFloor, driver.Down, false)
+				if msg.Type == com.StoppingToFinishOrder {
+					driver.SetBtnLamp(msg.NewState.LastPassedFloor, driver.Up, false)
+					driver.SetBtnLamp(msg.NewState.LastPassedFloor, driver.Down, false)
 				}
-				tmp := states[msg.(com.SensorEventMsg).Sender]
-				tmp.Direction = msg.(com.SensorEventMsg).NewState.Direction
-				tmp.LastPassedFloor = msg.(com.SensorEventMsg).NewState.LastPassedFloor
-				tmp.Moving = msg.(com.SensorEventMsg).NewState.Moving
-				tmp.SequenceNumber = msg.(com.SensorEventMsg).NewState.SequenceNumber
-				tmp.DoorOpen = msg.(com.SensorEventMsg).NewState.DoorOpen
-				states[msg.(com.SensorEventMsg).Sender] = tmp
+				tmp := states[msg.Sender]
+				tmp.Direction = msg.NewState.Direction
+				tmp.LastPassedFloor = msg.NewState.LastPassedFloor
+				tmp.Moving = msg.NewState.Moving
+				tmp.SequenceNumber = msg.NewState.SequenceNumber
+				tmp.DoorOpen = msg.NewState.DoorOpen
+				states[msg.Sender] = tmp
 			case com.InitialStateMsg:
 				//Sanity check av state-endring
-				tmp := states[msg.(com.InitialStateMsg).Sender]
-				tmp.LastPassedFloor = msg.(com.InitialStateMsg).NewState.LastPassedFloor
-				tmp.Direction = msg.(com.InitialStateMsg).NewState.Direction
-				tmp.Moving = msg.(com.InitialStateMsg).NewState.Moving
-				tmp.SequenceNumber = msg.(com.InitialStateMsg).NewState.SequenceNumber
-				tmp.DoorOpen = msg.(com.InitialStateMsg).NewState.DoorOpen
+				tmp := states[msg.Sender]
+				tmp.LastPassedFloor = msg.NewState.LastPassedFloor
+				tmp.Direction = msg.NewState.Direction
+				tmp.Moving = msg.NewState.Moving
+				tmp.SequenceNumber = msg.NewState.SequenceNumber
+				tmp.DoorOpen = msg.NewState.DoorOpen
 				tmp.Valid = true
-				states[msg.(com.InitialStateMsg).Sender] = tmp
-				statetype.DeepOrdersetCopy(msg.(com.InitialStateMsg).NewState.Orders, states[msg.(com.InitialStateMsg).Sender].Orders)
+				states[msg.Sender] = tmp
+				statetype.DeepOrdersetCopy(msg.NewState.Orders, states[msg.Sender].Orders)
 			default:
 				fmt.Println("Manager received invalid message")
 			}
@@ -117,6 +126,14 @@ func Run(
 			send_chan <- com.InitialStateMsg{states[localIp], localIp}
 
 		case disconnected := <-disconnected_chan:
+
+			for order := range unconfirmedOrders {
+				if order.Reciever == disconnected {
+					go func(btnClick driver.ClickEvent) {
+						clickEvent_chan <- btnClick
+					}(order.Button)
+				}
+			}
 
 			// We should redistribute if we have the highest IP address, check if we do
 			shouldRedistribute := true
@@ -156,6 +173,7 @@ func Run(
 									send_chan <- com.OrderEventMsg{driver.ClickEvent{floor, btnType}, states[localIp], localIp}
 								} else {
 									send_chan <- com.OrderAssignmentMsg{driver.ClickEvent{floor, btnType}, bestIp, localIp}
+									unconfirmedOrders[unconfirmedOrder{driver.ClickEvent{floor, btnType}, bestIp}] = true
 								}
 							}
 						}
@@ -213,10 +231,11 @@ func Run(
 					tmp.Orders.AddOrder(buttonClick)
 					states[localIp] = tmp
 					send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
+					driver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
 				} else {
 					send_chan <- com.OrderAssignmentMsg{buttonClick, bestIp, localIp}
+					unconfirmedOrders[unconfirmedOrder{buttonClick, bestIp}] = true
 				}
-				driver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
 
 			}
 		case sensorEvent := <-sensorEvent_chan:

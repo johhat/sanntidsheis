@@ -16,7 +16,7 @@ const (
 	disconnected
 
 	udpHeartbeatInterval = 1 * time.Second
-	tcpHeartbeatInterval = 5 * time.Second
+	tcpHeartbeatInterval = 250 * time.Millisecond
 )
 
 var localIp string
