@@ -174,6 +174,9 @@ func Run(
 								bestIp := localIp                          // Local elevator is default
 								var shortestResponseTime float32 = 99999.9 //Inf
 								for ip, state := range states {
+									if ip == disconnected {
+										continue
+									}
 									if time := state.GetExpectedResponseTime(driver.ClickEvent{floor, btnType}); time < shortestResponseTime {
 										shortestResponseTime = time
 										bestIp = ip

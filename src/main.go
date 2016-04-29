@@ -18,7 +18,7 @@ func main() {
 	go func() {
 		for {
 			log.Println("\033[33m"+"Number of active goroutines:", runtime.NumGoroutine(), "\033[0m")
-			<-time.Tick(5 * time.Second)
+			<-time.Tick(20 * time.Second)
 		}
 	}()
 
