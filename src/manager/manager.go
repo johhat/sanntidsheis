@@ -106,6 +106,7 @@ func Run(
 			}
 
 		case completed := <-completed_floor:
+			fmt.Println("\033[34"+"Manager: Order(s) at floor", completed, "finished"+"\033[0m")
 			tmp := states[localIp]
 			tmp.Moving = false
 			tmp.DoorOpen = true
@@ -204,6 +205,7 @@ func Run(
 					tmp.SequenceNumber += 1
 					states[localIp] = tmp
 					send_chan <- com.OrderEventMsg{buttonClick, states[localIp], localIp}
+					fmt.Println("\033[34"+"Manager: New internal order at floor", buttonClick.Floor, "\033[0m")
 				}
 			} else {
 				exists := false
@@ -241,7 +243,7 @@ func Run(
 
 			}
 		case sensorEvent := <-sensorEvent_chan:
-			fmt.Println("Sensorevent:", sensorEvent)
+			fmt.Println("\033[34m"+"Sensorevent:", sensorEvent, "\033[0m")
 			if sensorEvent == -1 && !states[localIp].Moving {
 				elev_error_chan <- true
 				continue
@@ -258,17 +260,16 @@ func Run(
 					tmp.Valid = true
 				} else {
 					floor_reached <- sensorEvent
-					fmt.Println("Floor reached:", sensorEvent)
 				}
 				states[localIp] = tmp
-
 			}
 		case <-start_moving:
+			fmt.Println("\033[34" + "Manager: Starting to move" + "\033[0m")
 			tmp := states[localIp]
 			tmp.Moving = true
 			states[localIp] = tmp
 		case <-PassingFloor:
-			fmt.Println("Passing floor")
+			fmt.Println("\033[34" + "Manager: Passing floor" + "\033[0m")
 			send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp], localIp}
 		case <-elev_error_chan:
 			error_state = true

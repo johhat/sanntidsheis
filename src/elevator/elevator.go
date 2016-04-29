@@ -2,6 +2,7 @@ package elevator
 
 import (
 	driver "../driver"
+	"fmt"
 	"time"
 )
 
@@ -55,6 +56,7 @@ func Run(
 			orderForwardAtThisFloor := <-reply_chan
 
 			if internal0rderAtThisFloor || orderForwardAtThisFloor {
+				fmt.Println("\033[31m" + "Elevator: stopping" + "\033[0m")
 				passingFloor = false
 				driver.SetMotorDirection(driver.MotorStop)
 				driver.SetDoorOpenLamp(true)
@@ -76,8 +78,10 @@ func Run(
 				switch current_direction {
 				case Up:
 					driver.SetMotorDirection(driver.MotorUp)
+					fmt.Println("\033[31m" + "Elevator: moving up" + "\033[0m")
 				case Down:
 					driver.SetMotorDirection(driver.MotorDown)
+					fmt.Println("\033[31m" + "Elevator: moving down" + "\033[0m")
 				}
 				deadline_timer.Reset(deadline_period)
 				state = movingBetween
@@ -91,6 +95,7 @@ func Run(
 			orderBackwardAtThisFloor := <-reply_chan
 
 			if orderBehind || orderBackwardAtThisFloor {
+				fmt.Println("\033[31m" + "Elevator: Changing direction" + "\033[0m")
 				current_direction = current_direction.OppositeDirection()
 			}
 
