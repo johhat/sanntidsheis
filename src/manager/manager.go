@@ -83,6 +83,10 @@ func Run(
 				states[msg.Sender] = tmp
 			case com.InitialStateMsg:
 				//Sanity check av state-endring
+				if _, ok := states[msg.Sender]; !ok {
+					fmt.Println("Manager error: Received InitialStateMsg without first getting message on connected_chan")
+					break
+				}
 				if states[msg.Sender].Valid {
 					break
 				}
@@ -95,8 +99,8 @@ func Run(
 				tmp.SequenceNumber = msg.NewState.SequenceNumber
 				tmp.DoorOpen = msg.NewState.DoorOpen
 				tmp.Valid = true
-				statetype.DeepOrdersetCopy(msg.NewState.Orders, tmp.Orders)
 				states[msg.Sender] = tmp
+				statetype.DeepOrdersetCopy(msg.NewState.Orders, states[msg.Sender].Orders)
 
 			default:
 				fmt.Println("Manager received invalid message")
