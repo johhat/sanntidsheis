@@ -150,7 +150,7 @@ func (state State) GetExpectedResponseTime(newOrder driver.ClickEvent) (response
 
 	fmt.Printf("\033[36m" + "\tResponse time sequence: ")
 	if state.Moving {
-		fmt.Printf("Move to next floor %i", currentFloor)
+		fmt.Printf("Move to next floor %v", currentFloor)
 	}
 	if state.DoorOpen {
 		fmt.Printf("Close door")
