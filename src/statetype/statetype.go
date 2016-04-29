@@ -20,8 +20,8 @@ type State struct {
 
 const (
 	stopTime         float32 = 3
-	floorTravelTime  float32 = 2 //2.2+floorPassingTime
 	floorPassingTime float32 = 0.385
+	floorTravelTime  float32 = 2.2 + floorPassingTime
 	movingPenalty    float32 = floorTravelTime / 2
 	doorOpenPenalty  float32 = stopTime / 2
 )

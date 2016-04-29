@@ -2,7 +2,6 @@ package driver
 
 import (
 	. "./elevatorIo"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -18,58 +17,8 @@ const (
 	PollInterval = 1 * time.Millisecond
 )
 
-type BtnType int
-type MotorDirection int
-
-type ClickEvent struct {
-	Floor int
-	Type  BtnType
-}
-
-func (event ClickEvent) String() string {
-	return fmt.Sprintf("%s button click at floor %d", event.Type, event.Floor)
-}
-
-const (
-	Up BtnType = iota
-	Down
-	Command
-)
-
-func (btn BtnType) String() string {
-	switch btn {
-	case Up:
-		return "Up"
-	case Down:
-		return "Down"
-	case Command:
-		return "Command"
-	default:
-		return fmt.Sprintf("Btn(%d)", btn)
-	}
-}
-
-const (
-	MotorUp MotorDirection = iota
-	MotorStop
-	MotorDown
-)
-
 func GetCurrentFloor() int {
 	return state
-}
-
-func (direction MotorDirection) String() string {
-	switch direction {
-	case MotorUp:
-		return "Motor up"
-	case MotorStop:
-		return "Motor stop"
-	case MotorDown:
-		return "Motor down"
-	default:
-		return fmt.Sprintf("MotorDirection(%d)", direction)
-	}
 }
 
 func pollFloorSensor(sensorEventChan chan int) {
@@ -109,26 +58,6 @@ func pollButtons(clickEventChan chan ClickEvent) {
 	}
 }
 
-func BasicElevator() {
-
-	SetMotorDirection(MotorUp)
-
-	for {
-		switch {
-		case GetFloorSensorSignal() == 0:
-			SetMotorDirection(MotorUp)
-		case GetFloorSensorSignal() == NumFloors-1:
-			SetMotorDirection(MotorDown)
-		case getObstructionSignal():
-			SetMotorDirection(MotorStop)
-			os.Exit(1)
-		case getStopSignal():
-			SetMotorDirection(MotorStop)
-			os.Exit(1)
-		}
-	}
-}
-
 func init() {
 
 	err := InitializeElevatorIo()
@@ -140,7 +69,6 @@ func init() {
 
 	setStopLamp(false)
 	SetDoorOpenLamp(false)
-	SetFloorIndicator(0)
 	clearBtnLamps()
 
 	SetMotorDirection(MotorDown)
@@ -148,6 +76,8 @@ func init() {
 	for GetFloorSensorSignal() == InvalidFloor {
 		//TODO: Add timeout
 	}
+
+	SetFloorIndicator(GetFloorSensorSignal())
 
 	SetMotorDirection(MotorStop)
 }
@@ -165,7 +95,6 @@ func clearBtnLamps() {
 	}
 }
 
-// Getters
 func getBtnSignal(floor int, button BtnType) bool {
 
 	if floor < 0 || floor >= NumFloors {
@@ -211,8 +140,6 @@ func getStopSignal() bool {
 func getObstructionSignal() bool {
 	return ReadBit(OBSTRUCTION) == 1
 }
-
-// Setters
 
 func SetMotorDirection(direction MotorDirection) {
 	switch direction {

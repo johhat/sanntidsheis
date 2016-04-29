@@ -41,18 +41,6 @@ func main() {
 		disconnectFromNetwork,
 		reconnectToNetwork)
 
-	go func() {
-		for {
-			<-time.Tick(1 * time.Second)
-			//This is a broadcast msg
-			sendMsgChan <- com.OrderAssignmentMsg{
-				Button:   driver.ClickEvent{},
-				Assignee: "192.168.0.0",
-				Sender:   "192.168.0.100,",
-			}
-		}
-	}()
-
 	for {
 		select {
 		case msg := <-recvMsgChan:
