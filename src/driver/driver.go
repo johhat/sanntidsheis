@@ -8,12 +8,14 @@ import (
 	"time"
 )
 
+var state int
+
 const (
 	NumFloors    = 4
 	NumBtnTypes  = 3
 	InvalidFloor = -1
 	MotorSpeed   = 2800
-	PollInterval = 20 * time.Millisecond
+	PollInterval = 1 * time.Millisecond
 )
 
 type BtnType int
@@ -53,6 +55,10 @@ const (
 	MotorDown
 )
 
+func GetCurrentFloor() int {
+	return state
+}
+
 func (direction MotorDirection) String() string {
 	switch direction {
 	case MotorUp:
@@ -68,10 +74,10 @@ func (direction MotorDirection) String() string {
 
 func pollFloorSensor(sensorEventChan chan int) {
 
-	state := -1
+	state = -1
 
 	for {
-		sensorSignal := getFloorSensorSignal()
+		sensorSignal := GetFloorSensorSignal()
 
 		if state != sensorSignal {
 			state = sensorSignal
@@ -105,19 +111,19 @@ func pollButtons(clickEventChan chan ClickEvent) {
 
 func BasicElevator() {
 
-	setMotorDirection(MotorUp)
+	SetMotorDirection(MotorUp)
 
 	for {
 		switch {
-		case getFloorSensorSignal() == 0:
-			setMotorDirection(MotorUp)
-		case getFloorSensorSignal() == NumFloors-1:
-			setMotorDirection(MotorDown)
+		case GetFloorSensorSignal() == 0:
+			SetMotorDirection(MotorUp)
+		case GetFloorSensorSignal() == NumFloors-1:
+			SetMotorDirection(MotorDown)
 		case getObstructionSignal():
-			setMotorDirection(MotorStop)
+			SetMotorDirection(MotorStop)
 			os.Exit(1)
 		case getStopSignal():
-			setMotorDirection(MotorStop)
+			SetMotorDirection(MotorStop)
 			os.Exit(1)
 		}
 	}
@@ -133,17 +139,17 @@ func init() {
 	}
 
 	setStopLamp(false)
-	setDoorOpenLamp(false)
-	setFloorIndicator(0)
+	SetDoorOpenLamp(false)
+	SetFloorIndicator(0)
 	clearBtnLamps()
 
-	setMotorDirection(MotorDown)
+	SetMotorDirection(MotorDown)
 
-	for getFloorSensorSignal() == InvalidFloor {
+	for GetFloorSensorSignal() == InvalidFloor {
 		//TODO: Add timeout
 	}
 
-	setMotorDirection(MotorStop)
+	SetMotorDirection(MotorStop)
 }
 
 func Init(clickEventChan chan ClickEvent, sensorEventChan chan int) {
@@ -154,7 +160,7 @@ func Init(clickEventChan chan ClickEvent, sensorEventChan chan int) {
 func clearBtnLamps() {
 	for f := 0; f < NumFloors; f++ {
 		for btn := 0; btn < NumBtnTypes; btn++ {
-			setBtnLamp(f, BtnType(btn), false)
+			SetBtnLamp(f, BtnType(btn), false)
 		}
 	}
 }
@@ -183,7 +189,7 @@ func getBtnSignal(floor int, button BtnType) bool {
 	}
 }
 
-func getFloorSensorSignal() int {
+func GetFloorSensorSignal() int {
 	switch {
 	case ReadBit(SENSOR_FLOOR1) != 0:
 		return 0
@@ -208,7 +214,7 @@ func getObstructionSignal() bool {
 
 // Setters
 
-func setMotorDirection(direction MotorDirection) {
+func SetMotorDirection(direction MotorDirection) {
 	switch direction {
 	case MotorDown:
 		SetBit(MOTORDIR)
@@ -221,7 +227,7 @@ func setMotorDirection(direction MotorDirection) {
 	}
 }
 
-func setFloorIndicator(floor int) {
+func SetFloorIndicator(floor int) {
 	if floor&0x02 != 0 {
 		SetBit(LIGHT_FLOOR_IND1)
 	} else {
@@ -236,7 +242,7 @@ func setFloorIndicator(floor int) {
 	}
 }
 
-func setBtnLamp(floor int, btn BtnType, setTo bool) {
+func SetBtnLamp(floor int, btn BtnType, setTo bool) {
 
 	var lightChannels = [NumFloors][NumBtnTypes]int{
 		[NumBtnTypes]int{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
@@ -253,7 +259,7 @@ func setBtnLamp(floor int, btn BtnType, setTo bool) {
 			ClearBit(lightChannels[floor][int(btn)])
 		}
 	default:
-		log.Println("Btn type failure in setBtnLamp. Floor: ", floor)
+		log.Println("Btn type failure in SetBtnLamp. Floor: ", floor)
 	}
 }
 
@@ -265,7 +271,7 @@ func setStopLamp(setTo bool) {
 	}
 }
 
-func setDoorOpenLamp(setTo bool) {
+func SetDoorOpenLamp(setTo bool) {
 	if setTo {
 		SetBit(LIGHT_DOOR_OPEN)
 	} else {

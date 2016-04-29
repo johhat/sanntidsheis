@@ -1,7 +1,7 @@
 package com
 
 import (
-	driver "../simdriver"
+	driver "../driver"
 	s "../statetype"
 )
 

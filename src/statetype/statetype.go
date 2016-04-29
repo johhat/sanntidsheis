@@ -1,8 +1,8 @@
 package statetype
 
 import (
+	driver "../driver"
 	"../elevator"
-	"../simdriver"
 	"fmt"
 	"os"
 	"strconv"
@@ -27,9 +27,9 @@ const (
 )
 
 func (orders Orderset) RestoreInternalOrders() {
-	for floor := 0; floor < simdriver.NumFloors; floor++ {
+	for floor := 0; floor < driver.NumFloors; floor++ {
 		if _, err := os.Stat("internalOrder" + strconv.Itoa(floor)); !os.IsNotExist(err) {
-			orders[simdriver.Command][floor] = true
+			orders[driver.Command][floor] = true
 		}
 	}
 }
@@ -41,13 +41,13 @@ func SaveInternalOrder(floor int) {
 	}
 }
 
-func (orders Orderset) IsOrder(event simdriver.ClickEvent) bool {
-	if event.Floor < 0 || event.Floor > simdriver.NumFloors-1 {
+func (orders Orderset) IsOrder(event driver.ClickEvent) bool {
+	if event.Floor < 0 || event.Floor > driver.NumFloors-1 {
 		//fmt.Println("Attempted to check order for non-existing floor")
 		return false
-	} else if event.Type == simdriver.Up && event.Floor == simdriver.NumFloors-1 {
+	} else if event.Type == driver.Up && event.Floor == driver.NumFloors-1 {
 		return false
-	} else if event.Type == simdriver.Down && event.Floor == 0 {
+	} else if event.Type == driver.Down && event.Floor == 0 {
 		return false
 	}
 	return orders[event.Type][event.Floor]
@@ -71,55 +71,55 @@ func (orders Orderset) IsOrderBehind(currentFloor int, direction elevator.Direct
 }
 
 func (orders Orderset) Init() {
-	for floor := 0; floor < simdriver.NumFloors; floor++ {
+	for floor := 0; floor < driver.NumFloors; floor++ {
 		if floor == 0 {
-			orders[simdriver.Up][floor] = false
-			orders[simdriver.Command][floor] = false
-		} else if floor == simdriver.NumFloors-1 {
-			orders[simdriver.Down][floor] = false
-			orders[simdriver.Command][floor] = false
+			orders[driver.Up][floor] = false
+			orders[driver.Command][floor] = false
+		} else if floor == driver.NumFloors-1 {
+			orders[driver.Down][floor] = false
+			orders[driver.Command][floor] = false
 		} else {
-			orders[simdriver.Up][floor] = false
-			orders[simdriver.Down][floor] = false
-			orders[simdriver.Command][floor] = false
+			orders[driver.Up][floor] = false
+			orders[driver.Down][floor] = false
+			orders[driver.Command][floor] = false
 		}
 	}
 }
 
-func (orders Orderset) AddOrder(order simdriver.ClickEvent) {
+func (orders Orderset) AddOrder(order driver.ClickEvent) {
 	switch order.Type {
-	case simdriver.Up:
-		if order.Floor < 0 || order.Floor > simdriver.NumFloors-2 {
+	case driver.Up:
+		if order.Floor < 0 || order.Floor > driver.NumFloors-2 {
 			fmt.Println("Attempted to add order to non-existing floor")
 			return
 		}
-	case simdriver.Down:
-		if order.Floor < 1 || order.Floor > simdriver.NumFloors-1 {
+	case driver.Down:
+		if order.Floor < 1 || order.Floor > driver.NumFloors-1 {
 			fmt.Println("Attempted to add order to non-existing floor")
 			return
 		}
-	case simdriver.Command:
-		if order.Floor >= simdriver.NumFloors || order.Floor < 0 {
+	case driver.Command:
+		if order.Floor >= driver.NumFloors || order.Floor < 0 {
 			fmt.Println("Attempted to add order to non-existing floor")
 			return
 		}
 	}
 	orders[order.Type][order.Floor] = true
-	//simdriver.SetBtnLamp(order.Floor, order.Type, true)
+	//driver.SetBtnLamp(order.Floor, order.Type, true)
 }
 
 func (orders Orderset) ClearOrders(floor int) {
 	if floor != 0 {
-		orders[simdriver.Down][floor] = false
+		orders[driver.Down][floor] = false
 	}
-	if floor != (simdriver.NumFloors - 1) {
-		orders[simdriver.Up][floor] = false
+	if floor != (driver.NumFloors - 1) {
+		orders[driver.Up][floor] = false
 	}
-	orders[simdriver.Command][floor] = false
+	orders[driver.Command][floor] = false
 }
 
-func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (responseTime float32) {
-	if ((newOrder.Type == simdriver.Up) && (newOrder.Floor == simdriver.NumFloors-1)) || ((newOrder.Type == simdriver.Down) && (newOrder.Floor == 0)) {
+func (state State) GetExpectedResponseTime(newOrder driver.ClickEvent) (responseTime float32) {
+	if ((newOrder.Type == driver.Up) && (newOrder.Floor == driver.NumFloors-1)) || ((newOrder.Type == driver.Down) && (newOrder.Floor == 0)) {
 		fmt.Println("Attempted to get response time of non-existing order type")
 		responseTime = -1
 		return
@@ -149,12 +149,12 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 	}
 
 	for {
-		if currentOrders[simdriver.Command][currentFloor] || currentOrders.IsOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection)}) {
+		if currentOrders[driver.Command][currentFloor] || currentOrders.IsOrder(driver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection)}) {
 			currentOrders.ClearOrders(currentFloor)
 			if currentOrders.IsOrder(newOrder) {
 				responseTime += stopTime
 			} else {
-				fmt.Println("\tResponse time:",responseTime)
+				fmt.Println("\tResponse time:", responseTime)
 				return
 			}
 		} else if currentOrders.IsOrderAhead(currentFloor, currentDirection) { //Ordre framover
@@ -164,7 +164,7 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 			} else {
 				currentFloor -= 1
 			}
-		} else if currentOrders.IsOrderBehind(currentFloor, currentDirection) || currentOrders.IsOrder(simdriver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection.OppositeDirection())}) { //Ordre bakover
+		} else if currentOrders.IsOrderBehind(currentFloor, currentDirection) || currentOrders.IsOrder(driver.ClickEvent{currentFloor, elevDirToDriverDir(currentDirection.OppositeDirection())}) { //Ordre bakover
 			currentDirection = currentDirection.OppositeDirection()
 		} else {
 			//No orders left, to prevent erronous infinite loop this must be catched
@@ -176,11 +176,11 @@ func (state State) GetExpectedResponseTime(newOrder simdriver.ClickEvent) (respo
 	return
 }
 
-func elevDirToDriverDir(dir elevator.Direction_t) simdriver.BtnType {
+func elevDirToDriverDir(dir elevator.Direction_t) driver.BtnType {
 	if dir == elevator.Up {
-		return simdriver.Up
+		return driver.Up
 	} else {
-		return simdriver.Down
+		return driver.Down
 	}
 }
 

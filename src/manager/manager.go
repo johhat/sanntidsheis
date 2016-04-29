@@ -2,9 +2,9 @@ package manager
 
 import (
 	"../com"
+	driver "../driver"
 	"../elevator"
 	"../networking"
-	driver "../simdriver"
 	"../statetype"
 	"fmt"
 )
