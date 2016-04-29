@@ -141,7 +141,7 @@ func Run(
 			send_chan <- com.InitialStateMsg{states[localIp].CreateCopy(), localIp}
 
 		case disconnected := <-disconnected_chan:
-
+			fmt.Println("\033[34m"+"Disconnected:", disconnected, "\033[0m")
 			for order := range unconfirmedOrders {
 				if order.Reciever == disconnected {
 					go func(btnClick driver.ClickEvent) {
@@ -159,6 +159,7 @@ func Run(
 				}
 				if remoteIpHighest && (ip != disconnected) {
 					shouldRedistribute = false
+					fmt.Println("\033[34m" + "\tWe should not redistribute" + "\033[0m")
 					break
 				}
 			}
