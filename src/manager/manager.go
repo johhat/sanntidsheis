@@ -11,7 +11,7 @@ import (
 
 type unconfirmedOrder struct {
 	Button   driver.ClickEvent
-	Reciever string
+	Receiver string
 }
 
 func Run(
@@ -32,7 +32,9 @@ func Run(
 	elev_error_chan chan bool,
 	disconnectFromNetwork chan<- bool,
 	reconnectToNetwork chan<- bool,
-	networking_timeout <-chan bool) {
+	networking_timeout <-chan bool,
+	resumeAfterError chan<- bool,
+	stopButtonChan chan<- bool) {
 
 	localIp := networking.GetLocalIp()
 	error_state := false
@@ -46,6 +48,7 @@ func Run(
 	states[localIp].Orders[driver.Down] = make(statetype.FloorOrders)
 	states[localIp].Orders[driver.Command] = make(statetype.FloorOrders)
 	states[localIp].Orders.Init()
+	states[localIp].Orders.RestoreInternalOrders()
 
 	for {
 		select {
@@ -106,6 +109,7 @@ func Run(
 			default:
 				fmt.Println("Manager received invalid message")
 			}
+
 		case readOrder := <-readOrder_chan:
 			readOrder.Resp <- states[localIp].Orders.IsOrder(readOrder.Order)
 		case readDir := <-readDir_chan:
@@ -127,11 +131,13 @@ func Run(
 			driver.SetBtnLamp(completed, driver.Command, false)
 			states[localIp] = tmp
 			send_chan <- com.SensorEventMsg{com.StoppingToFinishOrder, states[localIp].CreateCopy(), localIp}
+
 		case <-door_closed_chan:
 			tmp := states[localIp]
 			tmp.DoorOpen = false
 			states[localIp] = tmp
 			send_chan <- com.SensorEventMsg{com.DoorClosed, states[localIp].CreateCopy(), localIp}
+
 		case connected := <-connected_chan:
 			states[connected] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false, 0, false}
 			states[connected].Orders[driver.Up] = make(statetype.FloorOrders)
@@ -143,7 +149,7 @@ func Run(
 		case disconnected := <-disconnected_chan:
 			fmt.Println("\033[34m"+"Disconnected:", disconnected, "\033[0m")
 			for order := range unconfirmedOrders {
-				if order.Reciever == disconnected {
+				if order.Receiver == disconnected {
 					go func(btnClick driver.ClickEvent) {
 						clickEvent_chan <- btnClick
 					}(order.Button)
@@ -201,22 +207,23 @@ func Run(
 			}
 			delete(states, disconnected)
 
-		case buttonClick := <-clickEvent_chan: //Må endre til å inkludere stoppknapp
-			//Hvis stoppknapp {
+		case <-stopButtonChan:
 			if error_state {
 				//Init på nytt?
-				//Restart heartbeats
-				//Lytt til heartbeats
-				//error_state = false
+				reconnectToNetwork <- true
+				resumeAfterError <- true
+				error_state = false
 			}
-			//continue
-			//}
+
+		case buttonClick := <-clickEvent_chan:
+			if error_state {
+				break
+			}
 			if buttonClick.Type == driver.Command {
 				if !states[localIp].Orders.IsOrder(buttonClick) {
 					states[localIp].Orders.AddOrder(buttonClick)
 					driver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
-					//statetype.SaveInternalOrder(buttonClick.Floor)
-					//Add to local state
+					statetype.SaveInternalOrder(buttonClick.Floor)
 					tmp := states[localIp]
 					tmp.SequenceNumber += 1
 					states[localIp] = tmp
@@ -259,6 +266,7 @@ func Run(
 				}
 
 			}
+
 		case sensorEvent := <-sensorEvent_chan:
 			fmt.Println("\033[34m"+"Sensorevent:", sensorEvent, "\033[0m")
 			if sensorEvent == -1 && !states[localIp].Moving {
@@ -280,29 +288,40 @@ func Run(
 				}
 				states[localIp] = tmp
 			}
+
 		case <-start_moving:
 			fmt.Println("\033[34m" + "Manager: Starting to move" + "\033[0m")
 			tmp := states[localIp]
 			tmp.Moving = true
 			states[localIp] = tmp
+
 		case direction := <-new_direction_chan:
 			tmp := states[localIp]
 			tmp.Direction = direction
 			states[localIp] = tmp
+
 		case <-PassingFloor:
 			fmt.Println("\033[34m" + "Manager: Passing floor" + "\033[0m")
 			send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp].CreateCopy(), localIp}
+
 		case <-elev_error_chan:
 			error_state = true
 			disconnectFromNetwork <- true
-			//Stop light on
-			//Remove remote elevators from states?
+			for ip, _ := range states {
+				if ip != localIp {
+					delete(states, ip)
+				}
+			}
+			driver.SetStopLamp(true)
 		}
 	}
 }
 
 func sanityCheck(oldState statetype.State, newState statetype.State, event com.EventType) bool {
-	//Check sequence number
+	if newState.SequenceNumber <= oldState.SequenceNumber {
+		fmt.Println("Received message with nonincreasing sequence number")
+	}
+	/*//Check sequence number
 	if newState.SequenceNumber != (oldState.SequenceNumber + 1) {
 		fmt.Println("Received state message with out of order sequence number. Old:", oldState.SequenceNumber, "New:", newState.SequenceNumber)
 		if newState.SequenceNumber > (oldState.SequenceNumber + 1) {
@@ -349,5 +368,5 @@ func sanityCheck(oldState statetype.State, newState statetype.State, event com.E
 	case com.StoppingToFinishOrder:
 	case com.LeavingFloor:
 	}
-	return false
+	return false*/
 }

@@ -4,10 +4,11 @@ import (
 	driver "../driver"
 	"fmt"
 	"time"
+	"log"
 )
 
 const (
-	deadline_period = 5 * time.Second
+	deadline_period = 3 * time.Second
 	door_period     = 3 * time.Second
 )
 
@@ -26,7 +27,8 @@ func Run(
 	readDirs chan<- ReadDirection,
 	ReadOrders chan<- ReadOrder,
 	start_moving chan<- bool,
-	passingFloor_chan chan<- bool) {
+	passingFloor_chan chan<- bool,
+	resumeAfterError chan<- bool) {
 
 	reply_chan := make(chan bool)
 
@@ -39,8 +41,7 @@ func Run(
 	state := atFloor
 	last_passed_floor := driver.GetFloorSensorSignal()
 	if last_passed_floor == -1 {
-		//Even though the driver initialized the elevator to a valid floor, it seems to be something wrong
-		//Run init again or crash the program?
+		log.Fatal("[FATAL]\tElevator initializing between floors")
 	}
 
 	passingFloor := false
@@ -107,13 +108,30 @@ func Run(
 		case movingBetween:
 			select {
 			case floor := <-floor_reached:
+				if ((current_direction == Up) && (floor != last_passed_floor+1)) || ((current_direction == Down) && (floor != last_passed_floor-1)) {
+					elev_error <- true
+					state = errorState
+					break
+				}
 				last_passed_floor = floor
 				driver.SetFloorIndicator(floor)
 				state = atFloor
 				deadline_timer.Stop()
 			case <-deadline_timer.C:
 				elev_error <- true
+				state = errorState
 			}
+		case errorState:
+			<-resumeAfterError
+			if driver.GetFloorSensorSignal() == -1 {
+				driver.SetMotorDirection(driver.MotorDown)
+				for driver.GetFloorSensorSignal() == driver.InvalidFloor {
+					//TODO: Add timeout
+				}
+			}
+			last_passed_floor == GetFloorSensorSignal()
+			state = atFloor
+			fmt.Println("\033[31m" + "Elevator: resuming operation after error" + "\033[0m")
 		}
 		time.Sleep(5 * time.Millisecond)
 	}

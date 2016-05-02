@@ -25,6 +25,7 @@ const (
 	atFloor state_t = iota
 	doorOpen
 	movingBetween
+	errorState
 )
 
 type request_t int

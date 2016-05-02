@@ -28,8 +28,11 @@ const (
 
 func (orders Orderset) RestoreInternalOrders() {
 	for floor := 0; floor < driver.NumFloors; floor++ {
-		if _, err := os.Stat("internalOrder" + strconv.Itoa(floor)); !os.IsNotExist(err) {
+		file := "internalOrder" + strconv.Itoa(floor)
+		if _, err := os.Stat(file); !os.IsNotExist(err) {
 			orders[driver.Command][floor] = true
+			driver.SetBtnLamp(floor, driver.Command, true)
+			os.Remove(file)
 		}
 	}
 }
