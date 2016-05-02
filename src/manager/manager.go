@@ -209,9 +209,8 @@ func Run(
 
 		case <-stopButtonChan:
 			if error_state {
-				//Init på nytt?
-				reconnectToNetwork <- true
 				resumeAfterError <- true
+				reconnectToNetwork <- true
 				error_state = false
 			}
 

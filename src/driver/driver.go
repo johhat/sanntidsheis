@@ -46,7 +46,19 @@ func pollButtons(clickEventChan chan ClickEvent) {
 					}
 				}
 			}
+		}
+		time.Sleep(PollInterval)
+	}
+}
 
+func pollStopButton(stopButtonChan chan bool) {
+	pressed := false
+	for {
+		if !pressed && getStopSignal() {
+			pressed == true
+			stopButtonChan <- true
+		} else if !getStopSignal() {
+			pressed == false
 		}
 		time.Sleep(PollInterval)
 	}
@@ -61,7 +73,7 @@ func init() {
 		os.Exit(1)
 	}
 
-	setStopLamp(false)
+	SetStopLamp(false)
 	SetDoorOpenLamp(false)
 	clearBtnLamps()
 
@@ -76,9 +88,10 @@ func init() {
 	SetMotorDirection(MotorStop)
 }
 
-func Init(clickEventChan chan ClickEvent, sensorEventChan chan int) {
+func Init(clickEventChan chan ClickEvent, sensorEventChan chan int, stopButtonChan chan bool) {
 	go pollFloorSensor(sensorEventChan)
 	go pollButtons(clickEventChan)
+	go pollStopButton(stopButtonChan)
 }
 
 func clearBtnLamps() {
@@ -184,7 +197,7 @@ func SetBtnLamp(floor int, btn BtnType, setTo bool) {
 	}
 }
 
-func setStopLamp(setTo bool) {
+func SetStopLamp(setTo bool) {
 	if setTo {
 		SetBit(LIGHT_STOP)
 	} else {
