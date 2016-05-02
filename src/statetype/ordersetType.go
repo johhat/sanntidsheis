@@ -1,7 +1,7 @@
 package statetype
 
 import (
-	driver "../simdriver"
+	driver "../driver"
 	"encoding/json"
 	"strconv"
 )

@@ -1,8 +1,8 @@
 package statetype
 
 import (
+	driver "../driver"
 	"../elevator"
-	driver "../simdriver"
 	"fmt"
 	"os"
 	"strconv"

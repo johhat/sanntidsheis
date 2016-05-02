@@ -69,11 +69,12 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 			}
 		case ip := <-tcpDialFail:
 			delete(connectionStatuses, ip)
+			delete(heartbeats, ip)
 		case newClient := <-tcpClient:
 			status, ok := connectionStatuses[newClient.Ip]
 
 			if ok && status == connected {
-				//TODO: Tenk gjennom om dette er et scenario som kan skje
+				//TODO: Tenk gjennom om dette er et scenario som kan skje - for i så fall er det ugreit
 				log.Println("Network module add new client: Client allready registered as connected")
 				continue
 			}
@@ -133,7 +134,7 @@ func handleTCPClient(client tcp.ClientInterface,
 				decodedMsg, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
 				if err != nil {
-					log.Println("Error when decoding TCP msg:", err, string(rawMsg.Data), "Sender:", rawMsg.Ip)
+					log.Println("Error when decoding TCP msg:", err, "Data:", string(rawMsg.Data), "Sender:", rawMsg.Ip)
 					continue
 				}
 
@@ -141,6 +142,7 @@ func handleTCPClient(client tcp.ClientInterface,
 			}
 
 			clientDisconnected <- client.Ip
+			log.Println("End of handleTCPCLient for ip", client.Ip)
 			return
 		}
 	}
@@ -167,8 +169,6 @@ func handleTcpSendMsg(msg com.Message, clients map[string]tcp.ClientInterface) {
 			return
 		}
 
-		//TODO: Test that this returns on fail. Check if send on closed chan can happen.
-		//Important that no sends are done after trigger on rmClient in network module
 		go func() {
 			select {
 			case <-client.IsDisconnected:
@@ -186,7 +186,6 @@ func handleTcpSendMsg(msg com.Message, clients map[string]tcp.ClientInterface) {
 			return
 		}
 
-		//Broadcast
 		for _, client := range clients {
 			go func(client tcp.ClientInterface) {
 				select {

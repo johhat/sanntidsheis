@@ -11,11 +11,14 @@ import (
 )
 
 const (
-	tcpListenPort    = ":6000"
-	readTimeout      = 1 * time.Second
-	heartbeatRate    = readTimeout / 4
-	heartbeatMessage = "TCP-HEARTBEAT" //TODO: Declare as byte array
-	dialTriesLimit   = 5
+	tcpListenPort  = ":6000"
+	dialTriesLimit = 5
+
+	readTimeout                   = 1 * time.Second
+	heartbeatRate                 = readTimeout / 4
+	heartbeatMessage              = "TCP-HEARTBEAT" //TODO: Declare as byte array
+	heartbeatMessageRecvFormat    = heartbeatMessage + "\n"
+	lenHeartbeatMessageRecvFormat = len(heartbeatMessageRecvFormat)
 )
 
 type ClientInterface struct {
@@ -74,8 +77,7 @@ func (c *client) RecieveFrom() <-chan bool {
 				return
 			}
 
-			//TODO: Test om den tar med \n nå den leser
-			if str := string(bytes); str == heartbeatMessage || str == heartbeatMessage+"\n" {
+			if len(bytes) == lenHeartbeatMessageRecvFormat && string(bytes) == heartbeatMessageRecvFormat {
 				continue
 			}
 
@@ -173,6 +175,7 @@ func handleConnection(connection net.Conn, addClient chan<- client, rmClient cha
 		rmClient <- client
 		close(client.chs.recvMsg) //When RecieveFrom returns, there are no senders left
 		//close(client.chs.sendMsg) //Force panic in any go-routines blocked on send to client
+		log.Println("End of TCP handleconnection for ip", client.ip)
 	}()
 
 	signalConnError := mergeChans(
@@ -188,7 +191,6 @@ func handleConnection(connection net.Conn, addClient chan<- client, rmClient cha
 		case <-signalConnError:
 			return
 		case <-client.chs.doDisconnect:
-			//TODO: Test if this is ok. Consider who should close
 			return
 		}
 	}
@@ -334,8 +336,3 @@ func Init(tcpClient chan<- ClientInterface,
 		}
 	}
 }
-
-//Incoming signal to stop TCP comm
-//Do not accept incoming dials (close accepts from listener)
-//Do not dial
-//Close pending connections

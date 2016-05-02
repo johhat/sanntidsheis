@@ -1,7 +1,7 @@
 package elevator
 
 import (
-	driver "../simdriver"
+	driver "../driver"
 	"fmt"
 	"time"
 )

@@ -71,7 +71,7 @@ func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
 	err = json.Unmarshal(data, &tempMap)
 
 	if err != nil {
-		log.Println("Error when decoding to tempmap. Err:", err, ". Data:", data)
+		log.Println("Error when decoding to tempmap. Err:", err, ". Data:", string(data))
 		return nil, err
 	}
 

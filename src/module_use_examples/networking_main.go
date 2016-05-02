@@ -4,6 +4,7 @@ import (
 	"../com"
 	"../networking"
 	"log"
+	"time"
 )
 
 //Hovedpc på sanntid har ip 129.241.187.158
@@ -37,6 +38,17 @@ func main() {
 		connected,
 		disconnected,
 		setStatus)
+
+	go func() {
+		<-time.After(10 * time.Second)
+		setStatus <- false
+		<-time.After(10 * time.Second)
+		setStatus <- false
+		<-time.After(10 * time.Second)
+		setStatus <- true
+		<-time.After(10 * time.Second)
+		setStatus <- true
+	}()
 
 	for {
 		select {
