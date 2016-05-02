@@ -32,7 +32,7 @@ func (orders Orderset) RestoreInternalOrders() {
 		if _, err := os.Stat(file); !os.IsNotExist(err) {
 			orders[driver.Command][floor] = true
 			driver.SetBtnLamp(floor, driver.Command, true)
-			os.Remove(file)
+			fmt.Println("Resored internal order at floor", floor)
 		}
 	}
 }
@@ -41,6 +41,13 @@ func SaveInternalOrder(floor int) {
 	_, err := os.Create("internalOrder" + strconv.Itoa(floor))
 	if err != nil {
 		fmt.Println(err)
+	}
+}
+
+func DeleteSavedOrder(floor int) {
+	file := "internalOrder" + strconv.Itoa(floor)
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		os.Remove(file)
 	}
 }
 

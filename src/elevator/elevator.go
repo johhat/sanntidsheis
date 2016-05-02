@@ -3,8 +3,8 @@ package elevator
 import (
 	driver "../driver"
 	"fmt"
-	"time"
 	"log"
+	"time"
 )
 
 const (
@@ -28,7 +28,8 @@ func Run(
 	ReadOrders chan<- ReadOrder,
 	start_moving chan<- bool,
 	passingFloor_chan chan<- bool,
-	resumeAfterError chan<- bool) {
+	resumeAfterError <-chan bool,
+	externalError <-chan bool) {
 
 	reply_chan := make(chan bool)
 
@@ -47,6 +48,13 @@ func Run(
 	passingFloor := false
 
 	for {
+		select {
+		case <-externalError:
+			driver.SetMotorDirection(driver.MotorStop)
+			elev_error <- true
+			state = errorState
+		default:
+		}
 		switch state {
 		case atFloor:
 			//Noen vil av, eller på i riktig retning
@@ -87,6 +95,7 @@ func Run(
 				state = movingBetween
 				passingFloor = true
 				break
+
 			}
 
 			readDirs <- ReadDirection{last_passed_floor, current_direction, IsOrderBehind, reply_chan}
@@ -108,7 +117,8 @@ func Run(
 		case movingBetween:
 			select {
 			case floor := <-floor_reached:
-				if ((current_direction == Up) && (floor != last_passed_floor+1)) || ((current_direction == Down) && (floor != last_passed_floor-1)) {
+				if ((current_direction == Up) && (floor != last_passed_floor+1)) || ((current_direction == Down) && (floor != last_passed_floor-1)) {
+					driver.SetMotorDirection(driver.MotorStop)
 					elev_error <- true
 					state = errorState
 					break
@@ -118,19 +128,41 @@ func Run(
 				state = atFloor
 				deadline_timer.Stop()
 			case <-deadline_timer.C:
+				driver.SetMotorDirection(driver.MotorStop)
+				elev_error <- true
+				state = errorState
+			}
+		case reInitState:
+			select {
+			case floor := <-floor_reached:
+				driver.SetMotorDirection(driver.MotorStop)
+				last_passed_floor = floor
+				driver.SetFloorIndicator(floor)
+				state = atFloor
+				deadline_timer.Stop()
+				state = atFloor
+			case <-deadline_timer.C:
+				driver.SetMotorDirection(driver.MotorStop)
 				elev_error <- true
 				state = errorState
 			}
 		case errorState:
+			deadline_timer.Stop()
 			<-resumeAfterError
-			if driver.GetFloorSensorSignal() == -1 {
-				driver.SetMotorDirection(driver.MotorDown)
-				for driver.GetFloorSensorSignal() == driver.InvalidFloor {
-					//TODO: Add timeout
+			if driver.GetFloorSensorSignal() == driver.InvalidFloor {
+				start_moving <- true
+				switch current_direction {
+				case Up:
+					driver.SetMotorDirection(driver.MotorUp)
+				case Down:
+					driver.SetMotorDirection(driver.MotorDown)
 				}
+				deadline_timer.Reset(deadline_period)
+				state = reInitState
+			} else {
+				last_passed_floor = driver.GetFloorSensorSignal()
+				state = atFloor
 			}
-			last_passed_floor == GetFloorSensorSignal()
-			state = atFloor
 			fmt.Println("\033[31m" + "Elevator: resuming operation after error" + "\033[0m")
 		}
 		time.Sleep(5 * time.Millisecond)

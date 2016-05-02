@@ -55,10 +55,10 @@ func pollStopButton(stopButtonChan chan bool) {
 	pressed := false
 	for {
 		if !pressed && getStopSignal() {
-			pressed == true
+			pressed = true
 			stopButtonChan <- true
 		} else if !getStopSignal() {
-			pressed == false
+			pressed = false
 		}
 		time.Sleep(PollInterval)
 	}

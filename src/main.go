@@ -33,7 +33,6 @@ func main() {
 	door_closed_chan := make(chan bool)
 	readDir_chan := make(chan elevator.ReadDirection)
 	readOrder_chan := make(chan elevator.ReadOrder)
-	networking_timeout := make(chan bool)
 	start_moving_chan := make(chan bool)
 	passing_floor_chan := make(chan bool)
 
@@ -41,9 +40,9 @@ func main() {
 	recvMsgChan := make(chan com.Message)
 	connected := make(chan string)
 	disconnected := make(chan string)
-	disconnectFromNetwork := make(chan bool)
-	reconnectToNetwork := make(chan bool)
+	setNetworkStatus := make(chan bool)
 	resumeAfterError := make(chan bool)
+	externalError := make(chan bool)
 
 	driver.Init(clickEvent_chan, sensorEvent_chan, stopButtonChan)
 
@@ -57,7 +56,8 @@ func main() {
 		readOrder_chan,
 		start_moving_chan,
 		passing_floor_chan,
-		resumeAfterError)
+		resumeAfterError,
+		externalError)
 
 	go manager.Run(
 		sendMsgChan,
@@ -75,11 +75,10 @@ func main() {
 		new_direction_chan,
 		passing_floor_chan,
 		elev_error_chan,
-		disconnectFromNetwork,
-		reconnectToNetwork,
-		networking_timeout,
+		setNetworkStatus,
 		resumeAfterError,
-		stopButtonChan)
+		stopButtonChan,
+		externalError)
 
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt)
@@ -88,7 +87,8 @@ func main() {
 		driver.SetMotorDirection(driver.MotorStop)
 		log.Fatal("[FATAL]\tUser terminated program")
 	}()
+
 	time.Sleep(500 * time.Millisecond) //Todo: Make network module default to disconnect state
-	networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected, disconnectFromNetwork, reconnectToNetwork)
+	networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected, setNetworkStatus)
 
 }

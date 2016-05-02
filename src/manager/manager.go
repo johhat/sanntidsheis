@@ -30,11 +30,10 @@ func Run(
 	new_direction_chan <-chan elevator.Direction_t,
 	PassingFloor <-chan bool,
 	elev_error_chan chan bool,
-	disconnectFromNetwork chan<- bool,
-	reconnectToNetwork chan<- bool,
-	networking_timeout <-chan bool,
+	setNetworkStatus chan<- bool,
 	resumeAfterError chan<- bool,
-	stopButtonChan chan<- bool) {
+	stopButtonChan <-chan bool,
+	externalError chan<- bool) {
 
 	localIp := networking.GetLocalIp()
 	error_state := false
@@ -130,6 +129,7 @@ func Run(
 			driver.SetBtnLamp(completed, driver.Down, false)
 			driver.SetBtnLamp(completed, driver.Command, false)
 			states[localIp] = tmp
+			statetype.DeleteSavedOrder(completed)
 			send_chan <- com.SensorEventMsg{com.StoppingToFinishOrder, states[localIp].CreateCopy(), localIp}
 
 		case <-door_closed_chan:
@@ -210,8 +210,9 @@ func Run(
 		case <-stopButtonChan:
 			if error_state {
 				resumeAfterError <- true
-				reconnectToNetwork <- true
+				setNetworkStatus <- true
 				error_state = false
+				driver.SetStopLamp(false)
 			}
 
 		case buttonClick := <-clickEvent_chan:
@@ -263,14 +264,15 @@ func Run(
 					send_chan <- com.OrderAssignmentMsg{buttonClick, bestIp, localIp}
 					unconfirmedOrders[unconfirmedOrder{buttonClick, bestIp}] = true
 				}
-
 			}
 
 		case sensorEvent := <-sensorEvent_chan:
-			fmt.Println("\033[34m"+"Sensorevent:", sensorEvent, "\033[0m")
+			fmt.Println("\033[34m"+"Sensorevent", sensorEvent, "\033[0m")
 			if sensorEvent == -1 && !states[localIp].Moving {
-				elev_error_chan <- true
-				continue
+				go func() {
+					externalError <- true
+				}()
+				break
 			}
 			if sensorEvent == -1 {
 				tmp := states[localIp]
@@ -283,7 +285,11 @@ func Run(
 				if !tmp.Valid {
 					tmp.Valid = true
 				} else {
-					floor_reached <- sensorEvent
+					fmt.Println("EVENT")
+					if states[localIp].Moving {
+						fmt.Println("\t ->EVENT")
+						floor_reached <- sensorEvent
+					}
 				}
 				states[localIp] = tmp
 			}
@@ -304,8 +310,9 @@ func Run(
 			send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp].CreateCopy(), localIp}
 
 		case <-elev_error_chan:
+			fmt.Println("\033[34m" + "Manager: Entering error state" + "\033[0m")
 			error_state = true
-			disconnectFromNetwork <- true
+			setNetworkStatus <- false
 			for ip, _ := range states {
 				if ip != localIp {
 					delete(states, ip)
@@ -366,6 +373,6 @@ func sanityCheck(oldState statetype.State, newState statetype.State, event com.E
 		return false
 	case com.StoppingToFinishOrder:
 	case com.LeavingFloor:
-	}
-	return false*/
+	}*/
+	return false
 }
