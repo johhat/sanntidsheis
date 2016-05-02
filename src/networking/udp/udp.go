@@ -64,7 +64,7 @@ func broadcast(broadcastChan <-chan []byte, localListener *net.UDPConn) {
 	}
 }
 
-func Init(udpBroadcastMsg <-chan []byte, udpRecvMsg chan<- RawMessage, localIp string) {
+func Init(localIp string) (chan<- []byte, <-chan RawMessage) {
 
 	addr, _ := net.ResolveUDPAddr("udp", listenPort)
 
@@ -90,14 +90,20 @@ func Init(udpBroadcastMsg <-chan []byte, udpRecvMsg chan<- RawMessage, localIp s
 
 	log.Println("UDP initialized")
 
-	for {
-		select {
-		case msg := <-udpBroadcastMsg:
-			broadcastChan <- msg
-		case rawMsg := <-recieveChan:
-			if rawMsg.Ip != localIp {
-				udpRecvMsg <- rawMsg
+	udpBroadcastMsg, udpRecvMsg := make(chan []byte), make(chan RawMessage)
+
+	go func() {
+		for {
+			select {
+			case msg := <-udpBroadcastMsg:
+				broadcastChan <- msg
+			case rawMsg := <-recieveChan:
+				if rawMsg.Ip != localIp {
+					udpRecvMsg <- rawMsg
+				}
 			}
 		}
-	}
+	}()
+
+	return udpBroadcastMsg, udpRecvMsg
 }

@@ -6,29 +6,33 @@ import (
 	"time"
 )
 
-func udpSendHeartbeats(udpBroadcastMsg chan<- []byte, quit <-chan bool) {
+func udpSendHeartbeats(udpBroadcastMsg chan<- []byte) chan<- bool {
 
-	udpHeartbeatNum := 0
-	udpHeatbeatTick := time.Tick(udpHeartbeatInterval)
+	quit := make(chan bool)
 
-	for {
-		select {
-		case <-udpHeatbeatTick:
-			m := com.CreateHeartbeat(udpHeartbeatNum)
-			w := com.WrapMessage(m)
+	go func() {
+		udpHeartbeatNum := 0
+		udpHeatbeatTick := time.Tick(udpHeartbeatInterval)
 
-			data, err := w.Encode()
+		for {
+			select {
+			case <-udpHeatbeatTick:
+				m := com.CreateHeartbeat(udpHeartbeatNum)
 
-			if err != nil {
-				log.Println("Error when encoding Heartbeat. Err:", err, ". Message:", m)
+				data, err := com.WrapMessage(m).Encode()
+
+				if err != nil {
+					log.Println("Error when encoding Heartbeat. Err:", err, ". Message:", m)
+				}
+
+				udpBroadcastMsg <- data
+				udpHeartbeatNum++
+			case <-quit:
+				return
 			}
-
-			udpBroadcastMsg <- data
-			udpHeartbeatNum++
-		case <-quit:
-			return
 		}
-	}
+	}()
+	return quit
 }
 
 func registerHeartbeat(heartbeats map[string]int, heartbeatNum int, sender string, connectionType string) {

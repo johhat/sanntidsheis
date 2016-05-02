@@ -15,6 +15,7 @@ const (
 	readTimeout      = 1 * time.Second
 	heartbeatRate    = readTimeout / 4
 	heartbeatMessage = "TCP-HEARTBEAT" //TODO: Declare as byte array
+	dialTriesLimit   = 5
 )
 
 type ClientInterface struct {
@@ -22,6 +23,11 @@ type ClientInterface struct {
 	SendMsg        chan []byte
 	RecvMsg        chan RawMessage
 	IsDisconnected chan bool
+}
+
+type DialRequest struct {
+	Ip          string
+	DialSuccess chan bool
 }
 
 type RawMessage struct {
@@ -166,7 +172,7 @@ func handleConnection(connection net.Conn, addClient chan<- client, rmClient cha
 		log.Printf("Connection from %v closed.\n", connection.RemoteAddr())
 		rmClient <- client
 		close(client.chs.recvMsg) //When RecieveFrom returns, there are no senders left
-		close(client.chs.sendMsg) //Force panic in any go-routines blocked on send to client
+		//close(client.chs.sendMsg) //Force panic in any go-routines blocked on send to client
 	}()
 
 	signalConnError := mergeChans(
@@ -244,22 +250,33 @@ func listen(addClient chan<- client, rmClient chan<- client, stopListener <-chan
 	listener.Close()
 }
 
-func dial(remoteIp string,
+func dial(request DialRequest,
 	addClient chan<- client,
 	rmClient chan<- client) {
 
-	connection, err := net.Dial("tcp", remoteIp+tcpListenPort)
+	connection, err := net.Dial("tcp", request.Ip+tcpListenPort)
+
+	numTries := 0
 
 	for {
 		if err != nil {
-			log.Printf("TCP dial to %s failed", remoteIp+tcpListenPort)
+			log.Printf("TCP dial to %s failed", request.Ip+tcpListenPort)
 			time.Sleep(500 * time.Millisecond) //TODO: Avslutte etter et visst antall forsøk? Må i så fall gi beskjed til modul om fail
-			connection, err = net.Dial("tcp", remoteIp+tcpListenPort)
-		} else {
-			log.Println("Handling dialed connection to ", remoteIp)
-			go handleConnection(connection, addClient, rmClient)
-			break
+			connection, err = net.Dial("tcp", request.Ip+tcpListenPort)
+
+			if numTries < dialTriesLimit {
+				numTries++
+				continue
+			} else {
+				request.DialSuccess <- false
+				return
+			}
 		}
+
+		log.Println("Handling dialed connection to ", request.Ip)
+		go handleConnection(connection, addClient, rmClient)
+		request.DialSuccess <- true
+		return
 	}
 }
 
@@ -270,7 +287,7 @@ func getRemoteIp(connection net.Conn) string {
 
 //TODO: Change naming of setOnOff
 func Init(tcpClient chan<- ClientInterface,
-	tcpDial <-chan string,
+	tcpDial <-chan DialRequest,
 	setOnOff <-chan bool,
 	localIp string) {
 
@@ -305,14 +322,15 @@ func Init(tcpClient chan<- ClientInterface,
 				closeAllConnections <- true
 			}
 
-		case remoteIp := <-tcpDial:
+		case request := <-tcpDial:
 			if !status {
 				log.Println("Abort dial as TCP module status is inactive")
+				request.DialSuccess <- false
 				continue
 			}
 
-			log.Println("Dialing ", remoteIp)
-			go dial(remoteIp, addClient, rmClient)
+			log.Println("Dialing ", request.Ip)
+			go dial(request, addClient, rmClient)
 		}
 	}
 }

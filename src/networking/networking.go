@@ -39,44 +39,55 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	log.Println("---Init network loop---")
 	log.Println("The ip of this computer is: ", localIp)
 
-	//Change state here
+	//Mutable states
 	status := true
 	connectionStatuses := make(map[string]connectionStatus)
-	tcpSendChans := make(map[string]chan<- []byte)
+	heartbeats := make(map[string]int)
+	clients := make(map[string]tcp.ClientInterface)
 
 	//UDP
-	stopUdpHeartbeats := make(chan bool)
-	udpBroadcastMsg := make(chan []byte)
-	udpRecvMsg := make(chan udp.RawMessage)
-	handleUdpMsgRecv := getUdpMsgRecvHandler()
-	go udp.Init(udpBroadcastMsg, udpRecvMsg, localIp)
-	go udpSendHeartbeats(udpBroadcastMsg, stopUdpHeartbeats) //TODO: Stopp utsending dersom frakoblet
+	var stopUdpHeartbeats chan<- bool
+	udpBroadcastMsg, udpRecvMsg := udp.Init(localIp)
+	stopUdpHeartbeats = udpSendHeartbeats(udpBroadcastMsg)
 
 	//TCP
 	tcpClient := make(chan tcp.ClientInterface)
 	clientDisconnected := make(chan string)
 	setTCPStatus := make(chan bool)
-	tcpDial := make(chan string)
+	tcpDial := make(chan tcp.DialRequest)
+	tcpDialFail := make(chan string)
 
-	//TODO: Bryt tilkobling, Avbryt lytting og ikke gjør dial dersom frakoblet
 	go tcp.Init(tcpClient, tcpDial, setTCPStatus, localIp)
 
 	for {
 		select {
 		case msg := <-sendMsgChan:
-			handleTcpSendMsg(msg, tcpSendChans)
+			handleTcpSendMsg(msg, clients)
 		case rawMsg := <-udpRecvMsg:
 			if status {
-				handleUdpMsgRecv(rawMsg, connectionStatuses, tcpDial, localIp)
+				handleUDPRecvMsg(rawMsg, connectionStatuses, heartbeats, tcpDial, tcpDialFail)
 			}
+		case ip := <-tcpDialFail:
+			delete(connectionStatuses, ip)
 		case newClient := <-tcpClient:
+			status, ok := connectionStatuses[newClient.Ip]
+
+			if ok && status == connected {
+				//TODO: Tenk gjennom om dette er et scenario som kan skje
+				log.Println("Network module add new client: Client allready registered as connected")
+				continue
+			}
+
 			connectionStatuses[newClient.Ip] = connected
-			tcpSendChans[newClient.Ip] = newClient.SendMsg
+			clients[newClient.Ip] = newClient
+
 			go handleTCPClient(newClient, recvMsgChan, connectedChan, clientDisconnected)
+
 		case disconnectedClient := <-clientDisconnected:
 			disconnectedChan <- disconnectedClient
-			delete(tcpSendChans, disconnectedClient)
+			delete(clients, disconnectedClient)
 			delete(connectionStatuses, disconnectedClient)
+			delete(heartbeats, disconnectedClient)
 		case newStatus := <-setStatus:
 			if newStatus == status {
 				log.Println("Tried to set network module to its current status", status)
@@ -85,22 +96,23 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 
 			status = newStatus
 
+			setTCPStatus <- status
+
 			if status {
 				log.Println("Setting network module to active")
-				go udpSendHeartbeats(udpBroadcastMsg, stopUdpHeartbeats)
+				stopUdpHeartbeats = udpSendHeartbeats(udpBroadcastMsg)
 			} else {
 				log.Println("Setting network module to inactive")
-				stopUdpHeartbeats <- true
+				close(stopUdpHeartbeats)
 			}
 		}
 	}
 }
 
-func handleTCPClient(client tcp.ClientInterface, recvMsg chan<- com.Message, connectedChan, clientDisconnected chan<- string) {
-	//Make shure manager knows it is connected
-	//Start recieving messages
-	//Add sendChan to some sort of fan-out function
-	//If disconnected is signaled, flush recvChan, signal manager, stop incoming messages, delete from array of connected
+func handleTCPClient(client tcp.ClientInterface,
+	recvMsg chan<- com.Message,
+	connectedChan,
+	clientDisconnected chan<- string) {
 
 	connectedChan <- client.Ip
 
@@ -117,9 +129,7 @@ func handleTCPClient(client tcp.ClientInterface, recvMsg chan<- com.Message, con
 			recvMsg <- decodedMsg
 
 		case <-client.IsDisconnected:
-			//Flush incoming messages - the channel is closed when handleconnection in TCP returns
 			for rawMsg := range client.RecvMsg {
-				//Sending them to a blocking channel in manager here ensures all messages are read before manager gets disconn signal
 				decodedMsg, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
 				if err != nil {
@@ -129,24 +139,24 @@ func handleTCPClient(client tcp.ClientInterface, recvMsg chan<- com.Message, con
 
 				recvMsg <- decodedMsg
 			}
-			//Signal disconnect to manager
+
 			clientDisconnected <- client.Ip
 			return
 		}
 	}
 }
 
-func handleTcpSendMsg(msg com.Message, sendChans map[string]chan<- []byte) {
+func handleTcpSendMsg(msg com.Message, clients map[string]tcp.ClientInterface) {
 
 	switch msg := msg.(type) {
 	case com.DirectedMessage:
 
 		ip := msg.GetRecieverIp()
 
-		sendChan, ok := sendChans[ip]
+		client, ok := clients[ip]
 
 		if !ok {
-			log.Println("Error in handleTcpSendMsg. No sendChan to ip:", ip)
+			log.Println("Error in handleTcpSendMsg. No client with ip:", ip)
 			return
 		}
 
@@ -157,7 +167,15 @@ func handleTcpSendMsg(msg com.Message, sendChans map[string]chan<- []byte) {
 			return
 		}
 
-		sendChan <- data //TODO: Must have a disconnected path. I.e. pipe closed.
+		//TODO: Test that this returns on fail. Check if send on closed chan can happen.
+		//Important that no sends are done after trigger on rmClient in network module
+		go func() {
+			select {
+			case <-client.IsDisconnected:
+				log.Println("Failed to send msg. Client is disconnected. Msg:", string(data))
+			case client.SendMsg <- data:
+			}
+		}()
 
 	case com.Message:
 
@@ -169,8 +187,14 @@ func handleTcpSendMsg(msg com.Message, sendChans map[string]chan<- []byte) {
 		}
 
 		//Broadcast
-		for _, sendChan := range sendChans {
-			sendChan <- data //TODO: Must have a disconnected path. I.e. pipe closed.
+		for _, client := range clients {
+			go func(client tcp.ClientInterface) {
+				select {
+				case <-client.IsDisconnected:
+					log.Println("Failed to broadcast msg to client. Client is disconnected. Msg:", string(data))
+				case client.SendMsg <- data:
+				}
+			}(client)
 		}
 
 	default:
@@ -178,35 +202,48 @@ func handleTcpSendMsg(msg com.Message, sendChans map[string]chan<- []byte) {
 	}
 }
 
-func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, connectionStatuses map[string]connectionStatus, tcpDial chan<- string, localIp string) {
+func handleUDPRecvMsg(rawMsg udp.RawMessage,
+	connectionStatuses map[string]connectionStatus,
+	heartbeats map[string]int,
+	tcpDial chan<- tcp.DialRequest,
+	tcpDialFail chan<- string) {
 
-	heartbeats := make(map[string]int) //Wrapped in closure in place of static variable
+	m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
-	return func(rawMsg udp.RawMessage, connectionStatuses map[string]connectionStatus, tcpDial chan<- string, localIp string) {
-		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+	if err != nil {
+		log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))
+		return
+	}
 
-		if err != nil {
-			log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))
-		} else {
-			switch m.(type) {
-			case com.Heartbeat:
+	switch m := m.(type) {
+	case com.Heartbeat:
 
-				if m.(com.Heartbeat).Code != com.HeartbeatCode {
-					log.Printf("Recieved heartbeat with invalid code. Valid code is %s while the heartbeat had code %s. Will not connect to client %s", com.HeartbeatCode, m.(com.Heartbeat).Code, rawMsg.Ip)
-					return
-				}
-
-				if shouldDial(connectionStatuses, rawMsg.Ip, localIp) {
-					connectionStatuses[rawMsg.Ip] = connecting
-					tcpDial <- rawMsg.Ip
-				}
-
-				registerHeartbeat(heartbeats, m.(com.Heartbeat).HeartbeatNum, rawMsg.Ip, "UDP")
-
-			default:
-				log.Println("Recieved and decoded non-heartbeat UDP message. Ignoring message.")
-			}
+		if m.Code != com.HeartbeatCode {
+			log.Printf("Recieved heartbeat with invalid code. Valid code is %s while the heartbeat had code %s. Will not connect to client %s", com.HeartbeatCode, m.Code, rawMsg.Ip)
+			return
 		}
+
+		if shouldDial(connectionStatuses, rawMsg.Ip, localIp) {
+			connectionStatuses[rawMsg.Ip] = connecting
+			go func() {
+				req := tcp.DialRequest{
+					Ip:          rawMsg.Ip,
+					DialSuccess: make(chan bool),
+				}
+				tcpDial <- req
+
+				result := <-req.DialSuccess
+
+				if !result {
+					tcpDialFail <- rawMsg.Ip
+				}
+			}()
+		}
+
+		registerHeartbeat(heartbeats, m.HeartbeatNum, rawMsg.Ip, "UDP")
+
+	default:
+		log.Println("Recieved and decoded non-heartbeat UDP message. Ignoring message.")
 	}
 }
 
