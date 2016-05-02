@@ -24,6 +24,7 @@ func main() {
 
 	clickEvent_chan := make(chan driver.ClickEvent)
 	sensorEvent_chan := make(chan int)
+	stopButtonChan := make(chan bool)
 
 	completed_floor_chan := make(chan int)
 	elev_error_chan := make(chan bool)
@@ -42,8 +43,9 @@ func main() {
 	disconnected := make(chan string)
 	disconnectFromNetwork := make(chan bool)
 	reconnectToNetwork := make(chan bool)
+	resumeAfterError := make(chan bool)
 
-	driver.Init(clickEvent_chan, sensorEvent_chan)
+	driver.Init(clickEvent_chan, sensorEvent_chan, stopButtonChan)
 
 	go elevator.Run(
 		completed_floor_chan,
@@ -54,7 +56,8 @@ func main() {
 		readDir_chan,
 		readOrder_chan,
 		start_moving_chan,
-		passing_floor_chan)
+		passing_floor_chan,
+		resumeAfterError)
 
 	go manager.Run(
 		sendMsgChan,
@@ -74,7 +77,9 @@ func main() {
 		elev_error_chan,
 		disconnectFromNetwork,
 		reconnectToNetwork,
-		networking_timeout)
+		networking_timeout,
+		resumeAfterError,
+		stopButtonChan)
 
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt)
