@@ -11,16 +11,18 @@ import (
 )
 
 const (
-	tcpListenPort = ":6000"
-	readTimeout   = 1 * time.Second
+	tcpListenPort    = ":6000"
+	readTimeout      = 1 * time.Second
+	heartbeatRate    = readTimeout / 4
+	heartbeatMessage = "TCP-HEARTBEAT" //TODO: Declare as byte array
 )
 
-type TcpOperationMode int
-
-const (
-	Active TcpOperationMode = iota
-	Idle
-)
+type ClientInterface struct {
+	Ip             string
+	SendMsg        chan []byte
+	RecvMsg        chan RawMessage
+	IsDisconnected chan bool
+}
 
 type RawMessage struct {
 	Data []byte
@@ -34,12 +36,13 @@ type client struct {
 }
 
 type clientChans struct {
-	sendMsg    chan []byte
-	pipeClosed chan bool
-	disconnect chan bool
+	sendMsg      chan []byte
+	recvMsg      chan RawMessage
+	pipeIsClosed chan bool
+	doDisconnect chan bool
 }
 
-func (c client) RecieveFrom(ch chan<- RawMessage) <-chan bool {
+func (c *client) RecieveFrom() <-chan bool {
 
 	signalReturn := make(chan bool)
 
@@ -47,7 +50,7 @@ func (c client) RecieveFrom(ch chan<- RawMessage) <-chan bool {
 		defer func() {
 			select {
 			case signalReturn <- true:
-			case <-c.chs.pipeClosed:
+			case <-c.chs.pipeIsClosed:
 			}
 			close(signalReturn)
 			log.Println("End of RecieveFrom from", c.ip)
@@ -64,7 +67,13 @@ func (c client) RecieveFrom(ch chan<- RawMessage) <-chan bool {
 				log.Println("TCP recv error. Connection: ", c.ip, " error:", err)
 				return
 			}
-			ch <- RawMessage{Data: bytes, Ip: c.ip}
+
+			//TODO: Test om den tar med \n nå den leser
+			if str := string(bytes); str == heartbeatMessage || str == heartbeatMessage+"\n" {
+				continue
+			}
+
+			c.chs.recvMsg <- RawMessage{Data: bytes, Ip: c.ip}
 		}
 	}()
 	return signalReturn
@@ -78,7 +87,7 @@ func (c *client) SendTo() <-chan bool {
 		defer func() {
 			select {
 			case signalReturn <- true:
-			case <-c.chs.pipeClosed:
+			case <-c.chs.pipeIsClosed:
 			}
 			close(signalReturn)
 			log.Println("End of SendTo from", c.ip)
@@ -104,59 +113,37 @@ func (c *client) SendTo() <-chan bool {
 	return signalReturn
 }
 
-func handleMessages(sendMsg <-chan RawMessage,
-	broadcastMsg <-chan []byte,
+//TODO: Rename, consider removing.
+func handleClients(
+	tcpClient chan<- ClientInterface,
 	addClient <-chan client,
 	rmClient <-chan client,
-	localIp string,
-	tcpConnected chan<- string,
-	tcpConnectionFailure chan<- string) {
+	closeAllConnections <-chan bool,
+	localIp string) {
 
 	clients := make(map[net.Conn]clientChans)
 
 	for {
 		select {
-		case rawMsg := <-sendMsg:
-			sendToIp(rawMsg.Ip, clients, rawMsg.Data)
-		case msg := <-broadcastMsg:
-			broadcast(clients, msg)
 		case client := <-addClient:
 			clients[client.conn] = client.chs
-			tcpConnected <- client.ip
+			tcpClient <- ClientInterface{
+				Ip:             client.ip,
+				SendMsg:        client.chs.sendMsg,
+				RecvMsg:        client.chs.recvMsg,
+				IsDisconnected: client.chs.pipeIsClosed,
+			}
 		case client := <-rmClient:
 			delete(clients, client.conn)
-			tcpConnectionFailure <- client.ip
+		case <-closeAllConnections:
+			for _, clientChans := range clients {
+				clientChans.doDisconnect <- true
+			}
 		}
 	}
 }
 
-func sendToIp(ip string, clients map[net.Conn]clientChans, message []byte) {
-	for connection, channels := range clients {
-		if getRemoteIp(connection) == ip {
-			select {
-			case channels.sendMsg <- message:
-			case <-channels.pipeClosed:
-				log.Println("SendToIp send failed - pipe closed. Ip:", ip)
-			}
-			return
-		}
-	}
-	log.Println("TCP send to ip failed. No existing connection to ip", ip)
-}
-
-func broadcast(clients map[net.Conn]clientChans, message []byte) {
-	for _, channels := range clients {
-		go func(chs clientChans) {
-			select {
-			case chs.sendMsg <- message:
-			case <-chs.pipeClosed:
-				log.Println("Broadcast to one recvr failed - pipe closed.")
-			}
-		}(channels)
-	}
-}
-
-func handleConnection(connection net.Conn, recvMsg chan<- RawMessage, addClient chan<- client, rmClient chan<- client) {
+func handleConnection(connection net.Conn, addClient chan<- client, rmClient chan<- client) {
 
 	//TODO: Være sikker på at man unngår minnelekkasje ved at chs.disconnect ikke stenges
 
@@ -164,29 +151,41 @@ func handleConnection(connection net.Conn, recvMsg chan<- RawMessage, addClient 
 		ip:   getRemoteIp(connection),
 		conn: connection,
 		chs: clientChans{
-			sendMsg:    make(chan []byte),
-			pipeClosed: make(chan bool),
-			disconnect: make(chan bool),
+			sendMsg:      make(chan []byte),
+			recvMsg:      make(chan RawMessage),
+			pipeIsClosed: make(chan bool),
+			doDisconnect: make(chan bool),
 		},
 	}
 
-	addClient <- client
+	addClient <- client //This must happen before rmClient, i.e. no go'ing
 
 	defer func() {
-		close(client.chs.pipeClosed)
+		close(client.chs.pipeIsClosed)
 		connection.Close()
 		log.Printf("Connection from %v closed.\n", connection.RemoteAddr())
 		rmClient <- client
+		close(client.chs.recvMsg) //When RecieveFrom returns, there are no senders left
 		close(client.chs.sendMsg) //Force panic in any go-routines blocked on send to client
 	}()
 
-	signalCloseConn := mergeChans(
-		client.chs.pipeClosed,
-		client.RecieveFrom(recvMsg),
-		client.SendTo(),
-		client.chs.disconnect)
+	signalConnError := mergeChans(
+		client.RecieveFrom(),
+		client.SendTo())
 
-	<-signalCloseConn
+	heartbeatTick := time.Tick(heartbeatRate)
+
+	for {
+		select {
+		case <-heartbeatTick:
+			client.chs.sendMsg <- []byte(heartbeatMessage)
+		case <-signalConnError:
+			return
+		case <-client.chs.doDisconnect:
+			//TODO: Test if this is ok. Consider who should close
+			return
+		}
+	}
 }
 
 func mergeChans(done <-chan bool, channels ...<-chan bool) <-chan bool {
@@ -217,9 +216,7 @@ func mergeChans(done <-chan bool, channels ...<-chan bool) <-chan bool {
 	return merged
 }
 
-func listen(recvMsg chan<- RawMessage,
-	addClient chan<- client,
-	rmClient chan<- client) {
+func listen(addClient chan<- client, rmClient chan<- client, stopListener <-chan bool) {
 
 	listener, err := net.Listen("tcp", tcpListenPort)
 
@@ -229,22 +226,28 @@ func listen(recvMsg chan<- RawMessage,
 
 	log.Printf("Listening for TCP connections on %v", listener.Addr())
 
-	for {
-		connection, err := listener.Accept()
+	go func() {
+		for {
+			connection, err := listener.Accept()
 
-		if err != nil {
-			log.Println("Error in TCP listener:", err)
-			continue
+			if err != nil {
+				log.Println("Error in TCP listener:", err)
+				return //TODO: Return only if closed else continue
+			}
+
+			log.Printf("Handling incoming connection from %v", connection.RemoteAddr())
+			go handleConnection(connection, addClient, rmClient)
 		}
-		log.Printf("Handling incoming connection from %v", connection.RemoteAddr())
-		go handleConnection(connection, recvMsg, addClient, rmClient)
-	}
+	}()
+
+	<-stopListener
+	listener.Close()
 }
 
 func dial(remoteIp string,
-	recvMsg chan<- RawMessage,
 	addClient chan<- client,
 	rmClient chan<- client) {
+
 	connection, err := net.Dial("tcp", remoteIp+tcpListenPort)
 
 	for {
@@ -254,7 +257,7 @@ func dial(remoteIp string,
 			connection, err = net.Dial("tcp", remoteIp+tcpListenPort)
 		} else {
 			log.Println("Handling dialed connection to ", remoteIp)
-			go handleConnection(connection, recvMsg, addClient, rmClient)
+			go handleConnection(connection, addClient, rmClient)
 			break
 		}
 	}
@@ -265,25 +268,52 @@ func getRemoteIp(connection net.Conn) string {
 	return strings.Split(connection.RemoteAddr().String(), ":")[0]
 }
 
-func Init(tcpSendMsg <-chan RawMessage,
-	tcpBroadcastMsg <-chan []byte,
-	tcpRecvMsg chan<- RawMessage,
-	tcpConnected,
-	tcpConnectionFailure chan<- string,
+//TODO: Change naming of setOnOff
+func Init(tcpClient chan<- ClientInterface,
 	tcpDial <-chan string,
-	setOperationMode <-chan TcpOperationMode,
+	setOnOff <-chan bool,
 	localIp string) {
+
+	status := true
 
 	addClient := make(chan client)
 	rmClient := make(chan client)
 
-	go handleMessages(tcpSendMsg, tcpBroadcastMsg, addClient, rmClient, localIp, tcpConnected, tcpConnectionFailure)
-	go listen(tcpRecvMsg, addClient, rmClient)
+	stopListener := make(chan bool)
+	closeAllConnections := make(chan bool)
+
+	go handleClients(tcpClient, addClient, rmClient, closeAllConnections, localIp)
+	go listen(addClient, rmClient, stopListener)
 
 	for {
-		remoteIp := <-tcpDial
-		log.Println("Dialing ", remoteIp)
-		go dial(remoteIp, tcpRecvMsg, addClient, rmClient)
+		select {
+		case setTo := <-setOnOff:
+
+			if setTo == status {
+				log.Println("TCP set to its current status", status)
+				continue
+			}
+
+			status = setTo
+
+			if setTo {
+				log.Println("Setting TCP module to active")
+				go listen(addClient, rmClient, stopListener)
+			} else {
+				log.Println("Setting TCP module to inactive")
+				stopListener <- true
+				closeAllConnections <- true
+			}
+
+		case remoteIp := <-tcpDial:
+			if !status {
+				log.Println("Abort dial as TCP module status is inactive")
+				continue
+			}
+
+			log.Println("Dialing ", remoteIp)
+			go dial(remoteIp, addClient, rmClient)
+		}
 	}
 }
 

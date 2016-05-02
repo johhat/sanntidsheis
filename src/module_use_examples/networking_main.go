@@ -3,9 +3,7 @@ package main
 import (
 	"../com"
 	"../networking"
-	driver "../simdriver"
 	"log"
-	"time"
 )
 
 //Hovedpc på sanntid har ip 129.241.187.158
@@ -31,15 +29,14 @@ func main() {
 
 	sendMsgChan, recvMsgChan := make(chan com.Message), make(chan com.Message)
 	connected, disconnected := make(chan string), make(chan string)
-	disconnectFromNetwork, reconnectToNetwork := make(chan bool), make(chan bool)
+	setStatus := make(chan bool)
 
 	go networking.NetworkLoop(
 		sendMsgChan,
 		recvMsgChan,
 		connected,
 		disconnected,
-		disconnectFromNetwork,
-		reconnectToNetwork)
+		setStatus)
 
 	for {
 		select {

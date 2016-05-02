@@ -13,10 +13,8 @@ type connectionStatus int
 const (
 	connected connectionStatus = iota
 	connecting
-	disconnected
 
 	udpHeartbeatInterval = 1 * time.Second
-	tcpHeartbeatInterval = 250 * time.Millisecond
 )
 
 var localIp string
@@ -36,20 +34,18 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	recvMsgChan chan<- com.Message,
 	connectedChan,
 	disconnectedChan chan<- string,
-	disconnectFromNetwork,
-	reconnectToNetwork <-chan bool) {
+	setStatus <-chan bool) {
 
 	log.Println("---Init network loop---")
 	log.Println("The ip of this computer is: ", localIp)
 
 	//Change state here
-	networkModuleIsActive := true
-	clients := make(map[string]connectionStatus)
-
-	//Make collection of abortchans - for range over them on disconnectFromNetwork-signal
-	stopUdpHeartbeats, stopTcpHeartbeats := make(chan bool), make(chan bool)
+	status := true
+	connectionStatuses := make(map[string]connectionStatus)
+	tcpSendChans := make(map[string]chan<- []byte)
 
 	//UDP
+	stopUdpHeartbeats := make(chan bool)
 	udpBroadcastMsg := make(chan []byte)
 	udpRecvMsg := make(chan udp.RawMessage)
 	handleUdpMsgRecv := getUdpMsgRecvHandler()
@@ -57,136 +53,136 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	go udpSendHeartbeats(udpBroadcastMsg, stopUdpHeartbeats) //TODO: Stopp utsending dersom frakoblet
 
 	//TCP
-	setTcpOperationMode := make(chan tcp.TcpOperationMode)
-
-	tcpSendMsg := make(chan tcp.RawMessage)
-	tcpBroadcastMsg := make(chan []byte)
-	tcpRecvMsg := make(chan tcp.RawMessage)
-	tcpConnected := make(chan string)
-	tcpConnectionFailure := make(chan string)
+	tcpClient := make(chan tcp.ClientInterface)
+	clientDisconnected := make(chan string)
+	setTCPStatus := make(chan bool)
 	tcpDial := make(chan string)
 
 	//TODO: Bryt tilkobling, Avbryt lytting og ikke gjør dial dersom frakoblet
-	go tcp.Init(tcpSendMsg, tcpBroadcastMsg, tcpRecvMsg, tcpConnected, tcpConnectionFailure, tcpDial, setTcpOperationMode, localIp)
-	go tcpSendHeartbeats(tcpBroadcastMsg, stopTcpHeartbeats)
-	go handleTcpMsgRecv(tcpRecvMsg, recvMsgChan)
+	go tcp.Init(tcpClient, tcpDial, setTCPStatus, localIp)
 
 	for {
 		select {
 		case msg := <-sendMsgChan:
-			handleTcpSendMsg(msg, clients, tcpSendMsg, tcpBroadcastMsg)
+			handleTcpSendMsg(msg, tcpSendChans)
 		case rawMsg := <-udpRecvMsg:
-			if networkModuleIsActive {
-				handleUdpMsgRecv(rawMsg, clients, tcpDial, localIp)
+			if status {
+				handleUdpMsgRecv(rawMsg, connectionStatuses, tcpDial, localIp)
 			}
-		case remoteIp := <-tcpConnected:
-			clients[remoteIp] = connected
-			connectedChan <- remoteIp
-		case remoteIp := <-tcpConnectionFailure:
-			clients[remoteIp] = disconnected
-			disconnectedChan <- remoteIp
-		case <-disconnectFromNetwork:
-			if networkModuleIsActive != false {
-				networkModuleIsActive = false
-
-				log.Println("disconnectFromNetwork is noop")
-				//TODO: Handle disconnect
-				// Stop outgoing HBs
-				stopUdpHeartbeats <- true
-				stopTcpHeartbeats <- true
-				setTcpOperationMode <- tcp.Idle
-
-				// Disconnect from existing TCP-conns
-
-				// Ignore incoming TCP-dials
-				// Ignore incoming HBs
-				// Do not dial
-
+		case newClient := <-tcpClient:
+			connectionStatuses[newClient.Ip] = connected
+			tcpSendChans[newClient.Ip] = newClient.SendMsg
+			go handleTCPClient(newClient, recvMsgChan, connectedChan, clientDisconnected)
+		case disconnectedClient := <-clientDisconnected:
+			disconnectedChan <- disconnectedClient
+			delete(tcpSendChans, disconnectedClient)
+			delete(connectionStatuses, disconnectedClient)
+		case newStatus := <-setStatus:
+			if newStatus == status {
+				log.Println("Tried to set network module to its current status", status)
+				continue
 			}
 
-		case <-reconnectToNetwork:
-			if networkModuleIsActive != true {
+			status = newStatus
 
-				log.Println("reconnectToNetwork is noop")
-				//TODO: Handle reconnect
-				// Restart outgoing HBs
+			if status {
+				log.Println("Setting network module to active")
 				go udpSendHeartbeats(udpBroadcastMsg, stopUdpHeartbeats)
-				go tcpSendHeartbeats(tcpBroadcastMsg, stopTcpHeartbeats)
-				// React on incoming TCP-calls
-				// React on incoming HBs
-				// Dial
-				setTcpOperationMode <- tcp.Active
-				networkModuleIsActive = true
+			} else {
+				log.Println("Setting network module to inactive")
+				stopUdpHeartbeats <- true
 			}
 		}
 	}
 }
 
-func handleTcpSendMsg(msg com.Message, clients map[string]connectionStatus, tcpSendMsg chan<- tcp.RawMessage, tcpBroadcastMsg chan<- []byte) {
+func handleTCPClient(client tcp.ClientInterface, recvMsg chan<- com.Message, connectedChan, clientDisconnected chan<- string) {
+	//Make shure manager knows it is connected
+	//Start recieving messages
+	//Add sendChan to some sort of fan-out function
+	//If disconnected is signaled, flush recvChan, signal manager, stop incoming messages, delete from array of connected
 
-	switch msg.(type) {
+	connectedChan <- client.Ip
+
+	for {
+		select {
+		case rawMsg := <-client.RecvMsg:
+			decodedMsg, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+
+			if err != nil {
+				log.Println("Error when decoding TCP msg:", err, string(rawMsg.Data), "Sender:", rawMsg.Ip)
+				continue
+			}
+
+			recvMsg <- decodedMsg
+
+		case <-client.IsDisconnected:
+			//Flush incoming messages - the channel is closed when handleconnection in TCP returns
+			for rawMsg := range client.RecvMsg {
+				//Sending them to a blocking channel in manager here ensures all messages are read before manager gets disconn signal
+				decodedMsg, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+
+				if err != nil {
+					log.Println("Error when decoding TCP msg:", err, string(rawMsg.Data), "Sender:", rawMsg.Ip)
+					continue
+				}
+
+				recvMsg <- decodedMsg
+			}
+			//Signal disconnect to manager
+			clientDisconnected <- client.Ip
+			return
+		}
+	}
+}
+
+func handleTcpSendMsg(msg com.Message, sendChans map[string]chan<- []byte) {
+
+	switch msg := msg.(type) {
 	case com.DirectedMessage:
-		directedMsg := msg.(com.DirectedMessage)
 
-		ip := directedMsg.GetRecieverIp()
+		ip := msg.GetRecieverIp()
 
-		status, ok := clients[ip]
+		sendChan, ok := sendChans[ip]
 
-		if status != connected || !ok {
-			log.Println("Error in handleTcpSendMsg. Not connected to ip:", ip)
+		if !ok {
+			log.Println("Error in handleTcpSendMsg. No sendChan to ip:", ip)
 			return
 		}
 
-		w := com.WrapMessage(directedMsg)
-
-		data, err := w.Encode()
+		data, err := com.WrapMessage(msg).Encode()
 
 		if err != nil {
 			log.Println("Error when encoding msg in handleTcpSendMsg. Ignoring msg. Err:", err, "Msg:", msg)
 			return
 		}
 
-		tcpSendMsg <- tcp.RawMessage{Data: data, Ip: ip}
+		sendChan <- data //TODO: Must have a disconnected path. I.e. pipe closed.
+
 	case com.Message:
-		w := com.WrapMessage(msg)
 
-		data, err := w.Encode()
+		data, err := com.WrapMessage(msg).Encode()
 
 		if err != nil {
 			log.Println("Error when encoding msg in handleTcpSendMsg. Ignoring msg. Err:", err, "Msg:", msg)
 			return
 		}
 
-		tcpBroadcastMsg <- data
+		//Broadcast
+		for _, sendChan := range sendChans {
+			sendChan <- data //TODO: Must have a disconnected path. I.e. pipe closed.
+		}
+
 	default:
 		log.Println("Error in handleTcpSendMsg: Message does not satisfy any relevant message interface")
 	}
 }
 
-func handleTcpMsgRecv(tcpRecvMsg chan tcp.RawMessage, recvMsgChan chan<- com.Message) {
-
-	heartbeats := make(map[string]int)
-
-	for rawMsg := range tcpRecvMsg {
-		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
-		if err == nil {
-			switch m.(type) {
-			case com.Heartbeat:
-				registerHeartbeat(heartbeats, m.(com.Heartbeat).HeartbeatNum, rawMsg.Ip, "TCP")
-			default:
-				recvMsgChan <- m
-			}
-		} else {
-			log.Println("Error when decoding TCP msg:", err, string(rawMsg.Data))
-		}
-	}
-}
-
-func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
+func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, connectionStatuses map[string]connectionStatus, tcpDial chan<- string, localIp string) {
 
 	heartbeats := make(map[string]int) //Wrapped in closure in place of static variable
 
-	return func(rawMsg udp.RawMessage, clients map[string]connectionStatus, tcpDial chan<- string, localIp string) {
+	return func(rawMsg udp.RawMessage, connectionStatuses map[string]connectionStatus, tcpDial chan<- string, localIp string) {
 		m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
 		if err != nil {
@@ -200,8 +196,8 @@ func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, clients map[string]conne
 					return
 				}
 
-				if shouldDial(clients, rawMsg.Ip, localIp) {
-					clients[rawMsg.Ip] = connecting
+				if shouldDial(connectionStatuses, rawMsg.Ip, localIp) {
+					connectionStatuses[rawMsg.Ip] = connecting
 					tcpDial <- rawMsg.Ip
 				}
 
@@ -214,16 +210,11 @@ func getUdpMsgRecvHandler() func(rawMsg udp.RawMessage, clients map[string]conne
 	}
 }
 
-func shouldDial(clients map[string]connectionStatus, remoteIp string, localIp string) bool {
+func shouldDial(connectionStatuses map[string]connectionStatus, remoteIp string, localIp string) bool {
 
-	status, ok := clients[remoteIp]
+	_, ok := connectionStatuses[remoteIp]
 
 	if !ok {
-		clients[remoteIp] = disconnected
-		status = disconnected
-	}
-
-	if status == disconnected {
 		isHighest, err := HasHighestIp(remoteIp, localIp)
 
 		if err != nil {

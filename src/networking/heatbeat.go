@@ -6,31 +6,6 @@ import (
 	"time"
 )
 
-func tcpSendHeartbeats(tcpBroadcastMsg chan<- []byte, quit <-chan bool) {
-
-	tcpHeartbeatnum := 0
-	tcpHeartbeatTick := time.Tick(tcpHeartbeatInterval)
-
-	for {
-		select {
-		case <-tcpHeartbeatTick:
-			m := com.CreateHeartbeat(tcpHeartbeatnum)
-			w := com.WrapMessage(m)
-
-			data, err := w.Encode()
-
-			if err != nil {
-				log.Println("Error when encoding Heartbeat. Err:", err, ". Message:", m)
-			}
-
-			tcpBroadcastMsg <- data
-			tcpHeartbeatnum++
-		case <-quit:
-			return
-		}
-	}
-}
-
 func udpSendHeartbeats(udpBroadcastMsg chan<- []byte, quit <-chan bool) {
 
 	udpHeartbeatNum := 0
@@ -58,6 +33,7 @@ func udpSendHeartbeats(udpBroadcastMsg chan<- []byte, quit <-chan bool) {
 
 func registerHeartbeat(heartbeats map[string]int, heartbeatNum int, sender string, connectionType string) {
 
+	//TODO: Clear array on disconnect
 	prev, ok := heartbeats[sender]
 
 	if !ok {

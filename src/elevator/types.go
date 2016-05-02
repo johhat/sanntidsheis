@@ -1,7 +1,7 @@
 package elevator
 
 import (
-	driver "../driver"
+	driver "../simdriver"
 )
 
 type FloorOrders map[int]bool
