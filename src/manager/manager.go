@@ -17,6 +17,8 @@ type unconfirmedOrder struct {
 	Receiver string
 }
 
+var localIp string
+
 
 func Run(
 	send_chan chan<- com.Message,
@@ -39,7 +41,7 @@ func Run(
 	stopButtonChan <-chan bool,
 	externalError chan<- bool) {
 
-	localIp := networking.GetLocalIp()
+	localIp = networking.GetLocalIp()
 	error_state := false
 
 	unconfirmedOrders := make(map[unconfirmedOrder]bool)
@@ -179,7 +181,9 @@ func Run(
 
 			// For every external order that needs to be redistributed
 			shouldRedistribute := (highestIp != localIp && highestIp != disconnected)
-			if !shouldRedistribute {
+			if shouldRedistribute {
+				fmt.Println("\033[34m" + "\tRedistributing" + "\033[0m")
+			} else {
 				fmt.Println("\033[34m" + "\tWe should not redistribute, adding orders to redistributed orders" + "\033[0m")
 			}
 
@@ -319,7 +323,7 @@ func Run(
 }
 
 func getHighestIp(states map[string]statetype.State) string {
-	highestIp := ""
+	highestIp := localIp
 	for ip, _ := range states {
 		remoteIpHighest, err := networking.HasHighestIp(ip, highestIp)
 		if err != nil {
