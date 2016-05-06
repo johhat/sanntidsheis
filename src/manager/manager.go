@@ -180,7 +180,7 @@ func Run(
 			}
 
 			// For every external order that needs to be redistributed
-			shouldRedistribute := (highestIp != localIp && highestIp != disconnected)
+			shouldRedistribute := (highestIp == localIp)
 			if shouldRedistribute {
 				fmt.Println("\033[34m" + "\tRedistributing" + "\033[0m")
 			} else {
