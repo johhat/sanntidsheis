@@ -168,6 +168,7 @@ func Run(
 			secondHighestIp, ok := getSecondHighestIp(states)
 			if disconnected == highestIp && localIp == secondHighestIp && ok {
 				//redistribute redistributed orders
+				fmt.Println("\033[34m"+"Manager: highest ip disconnected, redistributing redistributed orders"+"\033[0m")
 				for button := range redistributedOrders{
 					delete(redistributedOrders, button)
 					go func(btnClick driver.ClickEvent) {
@@ -177,16 +178,20 @@ func Run(
 			}
 
 			// For every external order that needs to be redistributed
+			shouldRedistribute := (highestIp != localIp && highestIp != disconnected)
+			if !shouldRedistribute {
+				fmt.Println("\033[34m" + "\tWe should not redistribute, adding orders to redistributed orders" + "\033[0m")
+			}
+
 			for btnType, floorOrders := range states[disconnected].Orders {
 				if btnType != driver.Command {
 					for floor, isSet := range floorOrders {
 						if isSet {
-							if highestIp != localIp && highestIp != disconnected {
+							if shouldRedistribute {
 								go func(btnClick driver.ClickEvent) {
 									clickEvent_chan <- btnClick
 								}(driver.ClickEvent{floor, btnType})
 							} else {
-								fmt.Println("\033[34m" + "\tWe should not redistribute" + "\033[0m")
 								redistributedOrders[driver.ClickEvent{floor, btnType}] = true
 							}
 						}
