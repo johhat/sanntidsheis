@@ -168,6 +168,7 @@ func Run(
 
 			highestIp := getHighestIp(states)
 			secondHighestIp, ok := getSecondHighestIp(states)
+			fmt.Println("\033[34m"+"\tManager: highest ip:",highestIp,"secondHighestIp:",secondHighestIp,"\033[0m")
 			if disconnected == highestIp && localIp == secondHighestIp && ok {
 				//redistribute redistributed orders
 				fmt.Println("\033[34m"+"Manager: highest ip disconnected, redistributing redistributed orders"+"\033[0m")
@@ -180,7 +181,7 @@ func Run(
 			}
 
 			// For every external order that needs to be redistributed
-			shouldRedistribute := (highestIp == localIp)
+			shouldRedistribute := (highestIp == localIp || (highestIp == disconnected && localIp == secondHighestIp))
 			if shouldRedistribute {
 				fmt.Println("\033[34m" + "\tRedistributing" + "\033[0m")
 			} else {
@@ -337,14 +338,13 @@ func getHighestIp(states map[string]statetype.State) string {
 }
 
 func getSecondHighestIp(states map[string]statetype.State) (string, bool) {
-	ips := make([]int, len(states))
+	ips := make([]int, 0)
 	ipMap := make(map[int]string)
 	for ip, _ := range states {
 		ipParts := strings.SplitAfter(ip, ".")
 		
 		if len(ipParts) != 4 {
-		//TODO: Return string with ip
-		return "",false
+			return "",false
 		}
 
 		ip_int, err := strconv.Atoi(ipParts[3])
@@ -359,6 +359,6 @@ func getSecondHighestIp(states map[string]statetype.State) (string, bool) {
 	if len(ips) < 2{
 		return "", false
 	}
-	sort.Ints(ips)
+	sort.Sort(sort.Reverse(sort.IntSlice(ips)))
 	return ipMap[ips[1]], true
 }
