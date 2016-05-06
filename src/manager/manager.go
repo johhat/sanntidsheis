@@ -7,12 +7,16 @@ import (
 	"../networking"
 	"../statetype"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 type unconfirmedOrder struct {
 	Button   driver.ClickEvent
 	Receiver string
 }
+
 
 func Run(
 	send_chan chan<- com.Message,
@@ -39,6 +43,7 @@ func Run(
 	error_state := false
 
 	unconfirmedOrders := make(map[unconfirmedOrder]bool)
+	redistributedOrders := make(map[driver.ClickEvent]bool)
 
 	//Initialize queue
 	states := make(map[string]statetype.State)
@@ -60,12 +65,14 @@ func Run(
 				}
 				fmt.Println("Received assignment:", msg.Button)
 				states[localIp].Orders.AddOrder(msg.Button)
+				delete(redistributedOrders, msg.Button)
 				driver.SetBtnLamp(msg.Button.Floor, msg.Button.Type, true)
 				send_chan <- com.OrderEventMsg{msg.Button, states[localIp].CreateCopy(), localIp}
 
 			case com.OrderEventMsg:
 				//Sanity check av state-endring
 				delete(unconfirmedOrders, unconfirmedOrder{msg.Button, msg.Sender})
+				delete(redistributedOrders, msg.Button)
 				states[msg.Sender].Orders.AddOrder(msg.Button)
 				if msg.Button.Type != driver.Command {
 					driver.SetBtnLamp(msg.Button.Floor, msg.Button.Type, true)
@@ -148,6 +155,7 @@ func Run(
 
 		case disconnected := <-disconnected_chan:
 			fmt.Println("\033[34m"+"Disconnected:", disconnected, "\033[0m")
+			//Redistribute unconfirmed orders
 			for order := range unconfirmedOrders {
 				if order.Receiver == disconnected {
 					go func(btnClick driver.ClickEvent) {
@@ -156,50 +164,30 @@ func Run(
 				}
 			}
 
-			// We should redistribute if we have the highest IP address, check if we do
-			shouldRedistribute := true
-			for ip, _ := range states {
-				remoteIpHighest, err := networking.HasHighestIp(ip, localIp)
-				if err != nil {
-					fmt.Println(err)
-				}
-				if remoteIpHighest && (ip != disconnected) {
-					shouldRedistribute = false
-					fmt.Println("\033[34m" + "\tWe should not redistribute" + "\033[0m")
-					break
+			highestIp := getHighestIp(states)
+			secondHighestIp, ok := getSecondHighestIp(states)
+			if disconnected == highestIp && localIp == secondHighestIp && ok {
+				//redistribute redistributed orders
+				for button := range redistributedOrders{
+					delete(redistributedOrders, button)
+					go func(btnClick driver.ClickEvent) {
+						clickEvent_chan <- btnClick
+					}(button)
 				}
 			}
 
-			if shouldRedistribute {
-				// For every external order that needs to be redistributed
-				for btnType, floorOrders := range states[disconnected].Orders {
-					if btnType != driver.Command {
-						for floor, isSet := range floorOrders {
-							if isSet {
-								// Find the elevator with shortest expected response time
-								bestIp := localIp                          // Local elevator is default
-								var shortestResponseTime float32 = 99999.9 //Inf
-								for ip, state := range states {
-									if ip == disconnected {
-										continue
-									}
-									if time := state.GetExpectedResponseTime(driver.ClickEvent{floor, btnType}); time < shortestResponseTime {
-										shortestResponseTime = time
-										bestIp = ip
-									}
-								}
-								// Send order to the best elevator
-								fmt.Println("\033[34m"+"Manager: Reassigning order floor", floor, ",type", btnType, "to ip", bestIp, "\033[0m")
-								if bestIp == localIp {
-									tmp := states[localIp]
-									tmp.SequenceNumber += 1
-									tmp.Orders.AddOrder(driver.ClickEvent{floor, btnType})
-									states[localIp] = tmp
-									send_chan <- com.OrderEventMsg{driver.ClickEvent{floor, btnType}, states[localIp].CreateCopy(), localIp}
-								} else {
-									send_chan <- com.OrderAssignmentMsg{driver.ClickEvent{floor, btnType}, bestIp, localIp}
-									unconfirmedOrders[unconfirmedOrder{driver.ClickEvent{floor, btnType}, bestIp}] = true
-								}
+			// For every external order that needs to be redistributed
+			for btnType, floorOrders := range states[disconnected].Orders {
+				if btnType != driver.Command {
+					for floor, isSet := range floorOrders {
+						if isSet {
+							if highestIp != localIp && highestIp != disconnected {
+								go func(btnClick driver.ClickEvent) {
+									clickEvent_chan <- btnClick
+								}(driver.ClickEvent{floor, btnType})
+							} else {
+								fmt.Println("\033[34m" + "\tWe should not redistribute" + "\033[0m")
+								redistributedOrders[driver.ClickEvent{floor, btnType}] = true
 							}
 						}
 					}
@@ -267,8 +255,12 @@ func Run(
 			}
 
 		case sensorEvent := <-sensorEvent_chan:
+			if error_state{
+				break
+			}
 			fmt.Println("\033[34m"+"Sensorevent", sensorEvent, "\033[0m")
 			if sensorEvent == -1 && !states[localIp].Moving {
+				fmt.Println("\033[34m"+"Manager: left floor without moving"+"\033[0m")
 				go func() {
 					externalError <- true
 				}()
@@ -285,9 +277,7 @@ func Run(
 				if !tmp.Valid {
 					tmp.Valid = true
 				} else {
-					fmt.Println("EVENT")
 					if states[localIp].Moving {
-						fmt.Println("\t ->EVENT")
 						floor_reached <- sensorEvent
 					}
 				}
@@ -323,56 +313,43 @@ func Run(
 	}
 }
 
-func sanityCheck(oldState statetype.State, newState statetype.State, event com.EventType) bool {
-	if newState.SequenceNumber <= oldState.SequenceNumber {
-		fmt.Println("Received message with nonincreasing sequence number")
-	}
-	/*//Check sequence number
-	if newState.SequenceNumber != (oldState.SequenceNumber + 1) {
-		fmt.Println("Received state message with out of order sequence number. Old:", oldState.SequenceNumber, "New:", newState.SequenceNumber)
-		if newState.SequenceNumber > (oldState.SequenceNumber + 1) {
-			//Skipped message
-		} else if newState.SequenceNumber < (oldState.SequenceNumber + 1) {
-			//Received skipped message
+func getHighestIp(states map[string]statetype.State) string {
+	highestIp := ""
+	for ip, _ := range states {
+		remoteIpHighest, err := networking.HasHighestIp(ip, highestIp)
+		if err != nil {
+			fmt.Println(err)
+		}
+		if remoteIpHighest {
+			highestIp = ip
 		}
 	}
+	return highestIp
+}
 
-	//Check if old state + event = new state
-	lastPassedFloorEqual, directionEqual, movingEqual, ordersEqual, validEqual, dooropenEqual := oldState.Diff(newState)
-	switch event {
-	//case com.NewExternalOrder:
-	//	if(lastPassedFloorEqual && directionEqual && movingEqual && !ordersEqual && validEqual && dooropenEqual){
-	//		//Sjekk av bare én ordre er endret og at den er ekstern
-	//	}
-	//	return false
-	//case com.NewInternalOrder:
-	//	if(lastPassedFloorEqual && directionEqual && movingEqual && !ordersEqual && validEqual && dooropenEqual){
-	//		//Sjekk av bare én ordre er endret og at den er intern
-	//	}
-	//	return false
-	case com.PassingFloor:
-		if !lastPassedFloorEqual && directionEqual && movingEqual && ordersEqual && validEqual && dooropenEqual {
-			switch newState.Direction {
-			case elevator.Up:
-				if newState.LastPassedFloor == (oldState.LastPassedFloor + 1) {
-					return true
-				}
-			case elevator.Down:
-				if newState.LastPassedFloor == (oldState.LastPassedFloor - 1) {
-					return true
-				}
-			}
+func getSecondHighestIp(states map[string]statetype.State) (string, bool) {
+	ips := make([]int, len(states))
+	ipMap := make(map[int]string)
+	for ip, _ := range states {
+		ipParts := strings.SplitAfter(ip, ".")
+		
+		if len(ipParts) != 4 {
+		//TODO: Return string with ip
+		return "",false
 		}
-		return false
-	case com.DoorOpenedByInternalOrder:
-		if lastPassedFloorEqual && directionEqual && movingEqual && ordersEqual && validEqual && !dooropenEqual {
-			if newState.DoorOpen {
-				return true
-			}
+
+		ip_int, err := strconv.Atoi(ipParts[3])
+
+		if err!=nil {
+			return "",false
 		}
-		return false
-	case com.StoppingToFinishOrder:
-	case com.LeavingFloor:
-	}*/
-	return false
+
+		ipMap[ip_int] = ip
+		ips = append(ips, ip_int)
+	}
+	if len(ips) < 2{
+		return "", false
+	}
+	sort.Ints(ips)
+	return ipMap[ips[1]], true
 }

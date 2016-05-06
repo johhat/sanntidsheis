@@ -50,6 +50,7 @@ func Run(
 	for {
 		select {
 		case <-externalError:
+			fmt.Println("\033[31m" + "Elevator: received external error" + "\033[0m")
 			driver.SetMotorDirection(driver.MotorStop)
 			elev_error <- true
 			state = errorState
@@ -118,6 +119,7 @@ func Run(
 			select {
 			case floor := <-floor_reached:
 				if ((current_direction == Up) && (floor != last_passed_floor+1)) || ((current_direction == Down) && (floor != last_passed_floor-1)) {
+					fmt.Println("\033[31m" + "Elevator: missed floor signal, entering error state" + "\033[0m")
 					driver.SetMotorDirection(driver.MotorStop)
 					elev_error <- true
 					state = errorState
@@ -128,6 +130,7 @@ func Run(
 				state = atFloor
 				deadline_timer.Stop()
 			case <-deadline_timer.C:
+				fmt.Println("\033[31m" + "Elevator: timeout while moving" + "\033[0m")
 				driver.SetMotorDirection(driver.MotorStop)
 				elev_error <- true
 				state = errorState
@@ -138,10 +141,10 @@ func Run(
 				driver.SetMotorDirection(driver.MotorStop)
 				last_passed_floor = floor
 				driver.SetFloorIndicator(floor)
-				state = atFloor
 				deadline_timer.Stop()
 				state = atFloor
 			case <-deadline_timer.C:
+				fmt.Println("\033[31m" + "Elevator: timeout while reinitializing" + "\033[0m")
 				driver.SetMotorDirection(driver.MotorStop)
 				elev_error <- true
 				state = errorState
