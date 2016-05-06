@@ -62,6 +62,7 @@ func (c *client) RecieveFrom() <-chan bool {
 			case <-c.chs.pipeIsClosed:
 			}
 			close(signalReturn)
+			close(c.chs.recvMsg)
 			log.Println("End of RecieveFrom from", c.ip)
 		}()
 
@@ -81,7 +82,11 @@ func (c *client) RecieveFrom() <-chan bool {
 				continue
 			}
 
-			c.chs.recvMsg <- RawMessage{Data: bytes, Ip: c.ip}
+			select {
+			case c.chs.recvMsg <- RawMessage{Data: bytes, Ip: c.ip}:
+			case <-c.chs.pipeIsClosed:
+				return
+			}
 		}
 	}()
 	return signalReturn
@@ -103,17 +108,23 @@ func (c *client) SendTo() <-chan bool {
 
 		var b bytes.Buffer
 
-		for msg := range c.chs.sendMsg {
+		for {
+			select {
+			case msg:=<- c.chs.sendMsg:
 
-			b.Write(msg)
-			b.WriteRune('\n')
+				b.Write(msg)
+				b.WriteRune('\n')
 
-			_, err := c.conn.Write(b.Bytes())
+				_, err := c.conn.Write(b.Bytes())
 
-			b.Reset()
+				b.Reset()
 
-			if err != nil {
-				log.Println("TCP send error. Connection: ", c.ip, " error:", err)
+				if err != nil {
+					log.Println("TCP send error. Connection: ", c.ip, " error:", err)
+					return
+				}
+
+			case <-c.chs.pipeIsClosed:
 				return
 			}
 		}
@@ -168,17 +179,20 @@ func handleConnection(connection net.Conn, addClient chan<- client, rmClient cha
 
 	addClient <- client //This must happen before rmClient, i.e. no go'ing
 
+	mergeChanDone := make(chan bool)
+	
 	defer func() {
 		close(client.chs.pipeIsClosed)
+		close(mergeChanDone)
 		connection.Close()
 		log.Printf("Connection from %v closed.\n", connection.RemoteAddr())
 		rmClient <- client
-		close(client.chs.recvMsg) //When RecieveFrom returns, there are no senders left
 		//close(client.chs.sendMsg) //Force panic in any go-routines blocked on send to client
 		log.Println("End of TCP handleconnection for ip", client.ip)
 	}()
 
 	signalConnError := mergeChans(
+		mergeChanDone,
 		client.RecieveFrom(),
 		client.SendTo())
 
