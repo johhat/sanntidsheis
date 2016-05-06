@@ -117,9 +117,19 @@ func handleTCPClient(client tcp.ClientInterface,
 
 	connectedChan <- client.Ip
 
+	var recvFromClient <-chan tcp.RawMessage
+
+	recvFromClient = client.RecvMsg
+
 	for {
 		select {
-		case rawMsg := <-client.RecvMsg:
+		case rawMsg, isOpen := <-recvFromClient:
+
+			if !isOpen {
+				recvFromClient = nil
+				continue
+			}
+
 			decodedMsg, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
 
 			if err != nil {
