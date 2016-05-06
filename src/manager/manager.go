@@ -113,6 +113,15 @@ func Run(
 				tmp.Valid = true
 				states[msg.Sender] = tmp
 				statetype.DeepOrdersetCopy(msg.NewState.Orders, states[msg.Sender].Orders)
+				for btnType, floorOrders := range states[msg.Sender].Orders{
+					if btnType != driver.Command {
+						for floor, isSet := range floorOrders {
+							if isSet {
+								driver.SetBtnLamp(floor, btnType, true)
+							}
+						}
+					}
+				}
 
 			default:
 				fmt.Println("Manager received invalid message")
