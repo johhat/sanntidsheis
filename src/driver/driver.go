@@ -52,16 +52,18 @@ func pollButtons(clickEventChan chan<- ClickEvent) {
 }
 
 func pollStopButton(stopButtonChan chan<- bool) {
-	isPressed := false
+	isPressed := getStopBtnSignal()
 
-	if isPressed != getStopBtnSignal() {
-		isPressed = !isPressed
+	for {
+		if isPressed != getStopBtnSignal() {
+			isPressed = !isPressed
 
-		if isPressed {
-			stopButtonChan <- true
+			if isPressed {
+				stopButtonChan <- true
+			}
 		}
+		time.Sleep(PollInterval)
 	}
-	time.Sleep(PollInterval)
 }
 
 func init() {
