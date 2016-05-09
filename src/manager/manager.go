@@ -2,7 +2,7 @@ package manager
 
 import (
 	"../com"
-	driver "../driver"
+	"../driver"
 	"../elevator"
 	"../networking"
 	"../statetype"
@@ -20,44 +20,47 @@ type unconfirmedOrder struct {
 var localIp string
 
 func Run(
-	send_chan chan<- com.Message,
-	receive_chan <-chan com.Message,
-	connected_chan <-chan string,
-	disconnected_chan <-chan string,
-	readDir_chan <-chan elevator.ReadDirection,
-	readOrder_chan <-chan elevator.ReadOrder,
-	completed_floor <-chan int,
-	door_closed_chan <-chan bool,
-	clickEvent_chan chan driver.ClickEvent,
-	sensorEvent_chan <-chan int,
-	floor_reached chan<- int,
-	start_moving <-chan bool,
-	new_direction_chan <-chan elevator.Direction_t,
-	PassingFloor <-chan bool,
-	elev_error_chan chan bool,
-	setNetworkStatus chan<- bool,
+	clickEvent chan driver.ClickEvent,
+	sensorEvent <-chan int,
+	stopBtnEvent <-chan bool,
+
+	completedFloor <-chan int,
+	floorReached chan<- int,
+	newDirection <-chan elevator.Direction,
+	doorClosed <-chan bool,
+	startedMoving <-chan bool,
+	passingFloor <-chan bool,
+
+	elevatorError chan bool,
 	resumeAfterError chan<- bool,
-	stopButtonChan <-chan bool,
-	externalError chan<- bool) {
+	externalError chan<- bool,
+
+	readDirection <-chan elevator.ReadDirection,
+	readOrder <-chan elevator.ReadOrder,
+
+	sendMsg chan<- com.Message,
+	recvMsg <-chan com.Message,
+	connected <-chan string,
+	disconnected <-chan string,
+	setNetworkStatus chan<- bool) {
 
 	localIp = networking.GetLocalIp()
-	error_state := false
+	errorState := false
 
 	unconfirmedOrders := make(map[unconfirmedOrder]bool)
 	redistributedOrders := make(map[driver.ClickEvent]bool)
 
 	//Initialize queue
 	states := make(map[string]statetype.State)
-	states[localIp] = statetype.State{-1, elevator.GetCurrentDirection(), false, make(statetype.Orderset), false, 0, false}
-	states[localIp].Orders[driver.Up] = make(statetype.FloorOrders)
-	states[localIp].Orders[driver.Down] = make(statetype.FloorOrders)
-	states[localIp].Orders[driver.Command] = make(statetype.FloorOrders)
+
+	initializeState(states, localIp)
+
 	states[localIp].Orders.Init()
 	states[localIp].Orders.RestoreInternalOrders()
 
 	for {
 		select {
-		case msg := <-receive_chan:
+		case msg := <-recvMsg:
 			switch msg := msg.(type) {
 			case com.OrderAssignmentMsg:
 				if msg.Assignee != localIp {
@@ -68,13 +71,9 @@ func Run(
 				states[localIp].Orders.AddOrder(msg.Button)
 				delete(redistributedOrders, msg.Button)
 				driver.SetBtnLamp(msg.Button.Floor, msg.Button.Type, true)
-				send_chan <- com.OrderEventMsg{msg.Button, states[localIp].CreateCopy(), localIp}
+				sendMsg <- com.OrderEventMsg{msg.Button, states[localIp].CreateCopy(), localIp}
 
 			case com.OrderEventMsg:
-				if msg.NewState.SequenceNumber <= states[msg.Sender].SequenceNumber {
-					fmt.Println("Received OrderEventMsg with nonincreasing sequence number")
-					break
-				}
 				delete(unconfirmedOrders, unconfirmedOrder{msg.Button, msg.Sender})
 				delete(redistributedOrders, msg.Button)
 				states[msg.Sender].Orders.AddOrder(msg.Button)
@@ -82,25 +81,20 @@ func Run(
 					driver.SetBtnLamp(msg.Button.Floor, msg.Button.Type, true)
 				}
 			case com.SensorEventMsg:
-				if msg.NewState.SequenceNumber <= states[msg.Sender].SequenceNumber {
-					fmt.Println("Received SensorEventMsg with nonincreasing sequence number")
-					break
-				}
-				tmp := states[msg.Sender]
+				tmpState := states[msg.Sender]
 				if msg.Type == com.StoppingToFinishOrder {
 					driver.SetBtnLamp(msg.NewState.LastPassedFloor, driver.Up, false)
 					driver.SetBtnLamp(msg.NewState.LastPassedFloor, driver.Down, false)
 				}
-				statetype.DeepOrdersetCopy(msg.NewState.Orders, tmp.Orders)
-				tmp.Direction = msg.NewState.Direction
-				tmp.LastPassedFloor = msg.NewState.LastPassedFloor
-				tmp.Moving = msg.NewState.Moving
-				tmp.SequenceNumber = msg.NewState.SequenceNumber
-				tmp.DoorOpen = msg.NewState.DoorOpen
-				states[msg.Sender] = tmp
+				statetype.DeepOrdersetCopy(msg.NewState.Orders, tmpState.Orders)
+				tmpState.Direction = msg.NewState.Direction
+				tmpState.LastPassedFloor = msg.NewState.LastPassedFloor
+				tmpState.Moving = msg.NewState.Moving
+				tmpState.DoorOpen = msg.NewState.DoorOpen
+				states[msg.Sender] = tmpState
 			case com.InitialStateMsg:
 				if _, ok := states[msg.Sender]; !ok {
-					fmt.Println("Manager error: Received InitialStateMsg without first getting message on connected_chan")
+					fmt.Println("Manager error: Received InitialStateMsg without first getting message on connected")
 					break
 				}
 				if states[msg.Sender].Valid {
@@ -108,14 +102,13 @@ func Run(
 				}
 
 				fmt.Println("\033[34m"+"Manager: received InitialStateMsg from", msg.Sender, "\033[0m")
-				tmp := states[msg.Sender]
-				tmp.LastPassedFloor = msg.NewState.LastPassedFloor
-				tmp.Direction = msg.NewState.Direction
-				tmp.Moving = msg.NewState.Moving
-				tmp.SequenceNumber = msg.NewState.SequenceNumber
-				tmp.DoorOpen = msg.NewState.DoorOpen
-				tmp.Valid = true
-				states[msg.Sender] = tmp
+				tmpState := states[msg.Sender]
+				tmpState.LastPassedFloor = msg.NewState.LastPassedFloor
+				tmpState.Direction = msg.NewState.Direction
+				tmpState.Moving = msg.NewState.Moving
+				tmpState.DoorOpen = msg.NewState.DoorOpen
+				tmpState.Valid = true
+				states[msg.Sender] = tmpState
 				statetype.DeepOrdersetCopy(msg.NewState.Orders, states[msg.Sender].Orders)
 				for btnType, floorOrders := range states[msg.Sender].Orders {
 					if btnType != driver.Command {
@@ -131,44 +124,41 @@ func Run(
 				fmt.Println("Manager received invalid message")
 			}
 
-		case readOrder := <-readOrder_chan:
+		case readOrder := <-readOrder:
 			readOrder.Resp <- states[localIp].Orders.IsOrder(readOrder.Order)
-		case readDir := <-readDir_chan:
+		case readDir := <-readDirection:
 			switch readDir.Request {
 			case elevator.IsOrderAhead:
-				readDir.Resp <- states[localIp].Orders.IsOrderAhead(readDir.Floor, readDir.Direction)
+				readDir.Resp <- states[localIp].Orders.IsOrderAhead(readDir.Floor, readDir.Dir)
 			case elevator.IsOrderBehind:
-				readDir.Resp <- states[localIp].Orders.IsOrderBehind(readDir.Floor, readDir.Direction)
+				readDir.Resp <- states[localIp].Orders.IsOrderBehind(readDir.Floor, readDir.Dir)
 			}
 
-		case completed := <-completed_floor:
+		case completed := <-completedFloor:
 			fmt.Println("\033[34m"+"Manager: Order(s) at floor", completed, "finished"+"\033[0m")
-			tmp := states[localIp]
-			tmp.Moving = false
-			tmp.DoorOpen = true
-			tmp.Orders.ClearOrders(completed)
+			tmpState := states[localIp]
+			tmpState.Moving = false
+			tmpState.DoorOpen = true
+			tmpState.Orders.ClearOrders(completed)
 			driver.SetBtnLamp(completed, driver.Up, false)
 			driver.SetBtnLamp(completed, driver.Down, false)
 			driver.SetBtnLamp(completed, driver.Command, false)
-			states[localIp] = tmp
+			states[localIp] = tmpState
 			statetype.DeleteSavedOrder(completed)
-			send_chan <- com.SensorEventMsg{com.StoppingToFinishOrder, states[localIp].CreateCopy(), localIp}
+			sendMsg <- com.SensorEventMsg{com.StoppingToFinishOrder, states[localIp].CreateCopy(), localIp}
 
-		case <-door_closed_chan:
-			tmp := states[localIp]
-			tmp.DoorOpen = false
-			states[localIp] = tmp
-			send_chan <- com.SensorEventMsg{com.DoorClosed, states[localIp].CreateCopy(), localIp}
+		case <-doorClosed:
+			tmpState := states[localIp]
+			tmpState.DoorOpen = false
+			states[localIp] = tmpState
+			sendMsg <- com.SensorEventMsg{com.DoorClosed, states[localIp].CreateCopy(), localIp}
 
-		case connected := <-connected_chan:
-			states[connected] = statetype.State{-1, elevator.Up, false, make(statetype.Orderset), false, 0, false}
-			states[connected].Orders[driver.Up] = make(statetype.FloorOrders)
-			states[connected].Orders[driver.Down] = make(statetype.FloorOrders)
-			states[connected].Orders[driver.Command] = make(statetype.FloorOrders)
+		case connected := <-connected:
+			initializeState(states, connected)
 			fmt.Println("\033[34m"+"Manager: sending InitialStateMsg to", connected, "\033[0m")
-			send_chan <- com.InitialStateMsg{states[localIp].CreateCopy(), localIp}
+			sendMsg <- com.InitialStateMsg{states[localIp].CreateCopy(), localIp}
 
-		case disconnected := <-disconnected_chan:
+		case disconnected := <-disconnected:
 			fmt.Println("\033[34m"+"Disconnected:", disconnected, "\033[0m")
 
 			highestIp := getHighestIp(states)
@@ -179,7 +169,7 @@ func Run(
 			for order := range unconfirmedOrders {
 				if order.Receiver == disconnected {
 					go func(btnClick driver.ClickEvent) {
-						clickEvent_chan <- btnClick
+						clickEvent <- btnClick
 					}(order.Button)
 				}
 			}
@@ -191,7 +181,7 @@ func Run(
 				for button := range redistributedOrders {
 					delete(redistributedOrders, button)
 					go func(btnClick driver.ClickEvent) {
-						clickEvent_chan <- btnClick
+						clickEvent <- btnClick
 					}(button)
 				}
 			}
@@ -208,7 +198,7 @@ func Run(
 						if isSet {
 							if shouldRedistribute {
 								go func(btnClick driver.ClickEvent) {
-									clickEvent_chan <- btnClick
+									clickEvent <- btnClick
 								}(driver.ClickEvent{floor, btnType})
 							} else {
 								redistributedOrders[driver.ClickEvent{floor, btnType}] = true
@@ -220,16 +210,16 @@ func Run(
 
 			delete(states, disconnected)
 
-		case <-stopButtonChan:
-			if error_state {
+		case <-stopBtnEvent:
+			if errorState {
 				resumeAfterError <- true
 				setNetworkStatus <- true
-				error_state = false
+				errorState = false
 				driver.SetStopLamp(false)
 			}
 
-		case buttonClick := <-clickEvent_chan:
-			if error_state {
+		case buttonClick := <-clickEvent:
+			if errorState {
 				break
 			}
 			if buttonClick.Type == driver.Command {
@@ -237,10 +227,7 @@ func Run(
 					states[localIp].Orders.AddOrder(buttonClick)
 					driver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
 					statetype.SaveInternalOrder(buttonClick.Floor)
-					tmp := states[localIp]
-					tmp.SequenceNumber += 1
-					states[localIp] = tmp
-					send_chan <- com.OrderEventMsg{buttonClick, states[localIp].CreateCopy(), localIp}
+					sendMsg <- com.OrderEventMsg{buttonClick, states[localIp].CreateCopy(), localIp}
 					fmt.Println("\033[34m"+"Manager: New internal order at floor", buttonClick.Floor, "\033[0m")
 				}
 			} else {
@@ -267,20 +254,19 @@ func Run(
 				}
 				fmt.Println("Best IP for", buttonClick, "is", bestIp)
 				if bestIp == localIp {
-					tmp := states[localIp]
-					tmp.SequenceNumber += 1
-					tmp.Orders.AddOrder(buttonClick)
-					states[localIp] = tmp
-					send_chan <- com.OrderEventMsg{buttonClick, states[localIp].CreateCopy(), localIp}
+					tmpState := states[localIp]
+					tmpState.Orders.AddOrder(buttonClick)
+					states[localIp] = tmpState
+					sendMsg <- com.OrderEventMsg{buttonClick, states[localIp].CreateCopy(), localIp}
 					driver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
 				} else {
-					send_chan <- com.OrderAssignmentMsg{buttonClick, bestIp, localIp}
+					sendMsg <- com.OrderAssignmentMsg{buttonClick, bestIp, localIp}
 					unconfirmedOrders[unconfirmedOrder{buttonClick, bestIp}] = true
 				}
 			}
 
-		case sensorEvent := <-sensorEvent_chan:
-			if error_state {
+		case sensorEvent := <-sensorEvent:
+			if errorState {
 				break
 			}
 			fmt.Println("\033[34m"+"Sensorevent", sensorEvent, "\033[0m")
@@ -292,41 +278,38 @@ func Run(
 				break
 			}
 			if sensorEvent == -1 {
-				tmp := states[localIp]
-				tmp.SequenceNumber += 1
-				states[localIp] = tmp
-				send_chan <- com.SensorEventMsg{com.LeavingFloor, states[localIp].CreateCopy(), localIp}
+				sendMsg <- com.SensorEventMsg{com.LeavingFloor, states[localIp].CreateCopy(), localIp}
 			} else {
-				tmp := states[localIp]
-				tmp.LastPassedFloor = sensorEvent
-				if !tmp.Valid {
-					tmp.Valid = true
+				tmpState := states[localIp]
+				tmpState.LastPassedFloor = sensorEvent
+				if !tmpState.Valid {
+					tmpState.Valid = true
 				} else {
 					if states[localIp].Moving {
-						floor_reached <- sensorEvent
+						floorReached <- sensorEvent
 					}
 				}
-				states[localIp] = tmp
+				states[localIp] = tmpState
 			}
 
-		case <-start_moving:
+		case <-startedMoving:
 			fmt.Println("\033[34m" + "Manager: Starting to move" + "\033[0m")
-			tmp := states[localIp]
-			tmp.Moving = true
-			states[localIp] = tmp
+			tmpState := states[localIp]
+			tmpState.Moving = true
+			states[localIp] = tmpState
 
-		case direction := <-new_direction_chan:
-			tmp := states[localIp]
-			tmp.Direction = direction
-			states[localIp] = tmp
+		case direction := <-newDirection:
+			tmpState := states[localIp]
+			tmpState.Direction = direction
+			states[localIp] = tmpState
 
-		case <-PassingFloor:
+		case <-passingFloor:
 			fmt.Println("\033[34m" + "Manager: Passing floor" + "\033[0m")
-			send_chan <- com.SensorEventMsg{com.PassingFloor, states[localIp].CreateCopy(), localIp}
+			sendMsg <- com.SensorEventMsg{com.PassingFloor, states[localIp].CreateCopy(), localIp}
 
-		case <-elev_error_chan:
+		case <-elevatorError:
 			fmt.Println("\033[34m" + "Manager: Entering error state" + "\033[0m")
-			error_state = true
+			errorState = true
 			setNetworkStatus <- false
 			for ip, _ := range states {
 				if ip != localIp {
@@ -336,6 +319,13 @@ func Run(
 			driver.SetStopLamp(true)
 		}
 	}
+}
+
+func initializeState(states map[string]statetype.State, ip string) {
+	states[ip] = statetype.State{-1, elevator.GetCurrentDirection(), false, make(statetype.Orderset), false, false}
+	states[ip].Orders[driver.Up] = make(statetype.FloorOrders)
+	states[ip].Orders[driver.Down] = make(statetype.FloorOrders)
+	states[ip].Orders[driver.Command] = make(statetype.FloorOrders)
 }
 
 func getHighestIp(states map[string]statetype.State) string {
@@ -362,14 +352,14 @@ func getSecondHighestIp(states map[string]statetype.State) (string, bool) {
 			return "", false
 		}
 
-		ip_int, err := strconv.Atoi(ipParts[3])
+		ipInt, err := strconv.Atoi(ipParts[3])
 
 		if err != nil {
 			return "", false
 		}
 
-		ipMap[ip_int] = ip
-		ips = append(ips, ip_int)
+		ipMap[ipInt] = ip
+		ips = append(ips, ipInt)
 	}
 	if len(ips) < 2 {
 		return "", false

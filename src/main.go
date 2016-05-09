@@ -2,83 +2,85 @@ package main
 
 import (
 	"./com"
-	driver "./driver"
+	"./driver"
 	"./elevator"
 	"./manager"
 	"./networking"
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
-	"time"
 )
 
 func main() {
 
-	go func() {
-		for {
-			log.Println("\033[33m"+"Number of active goroutines:", runtime.NumGoroutine(), "\033[0m")
-			<-time.Tick(20 * time.Second)
-		}
-	}()
+	// Driver channels
+	clickEvent := make(chan driver.ClickEvent)
+	sensorEvent := make(chan int)
+	stopBtnEvent := make(chan bool)
 
-	clickEvent_chan := make(chan driver.ClickEvent)
-	sensorEvent_chan := make(chan int)
-	stopButtonChan := make(chan bool)
+	// Elevator event channels
+	completedFloor := make(chan int)
+	floorReached := make(chan int)
+	newDirection := make(chan elevator.Direction)
+	doorClosed := make(chan bool)
+	startedMoving := make(chan bool)
+	passingFloor := make(chan bool)
 
-	completed_floor_chan := make(chan int)
-	elev_error_chan := make(chan bool)
-	floor_reached_chan := make(chan int)
-	new_direction_chan := make(chan elevator.Direction_t)
-	door_closed_chan := make(chan bool)
-	readDir_chan := make(chan elevator.ReadDirection)
-	readOrder_chan := make(chan elevator.ReadOrder)
-	start_moving_chan := make(chan bool)
-	passing_floor_chan := make(chan bool)
-
-	sendMsgChan := make(chan com.Message)
-	recvMsgChan := make(chan com.Message)
-	connected := make(chan string)
-	disconnected := make(chan string)
-	setNetworkStatus := make(chan bool)
+	// Elevator error channels
+	elevatorError := make(chan bool)
 	resumeAfterError := make(chan bool)
 	externalError := make(chan bool)
 
-	driver.Init(clickEvent_chan, sensorEvent_chan, stopButtonChan)
+	// Elevator order channels
+	readDirection := make(chan elevator.ReadDirection)
+	readOrder := make(chan elevator.ReadOrder)
+
+	// Network channels
+	sendMsg := make(chan com.Message)
+	recvMsg := make(chan com.Message)
+	connected := make(chan string)
+	disconnected := make(chan string)
+	setNetworkStatus := make(chan bool)
+
+	driver.Init(clickEvent, sensorEvent, stopBtnEvent)
 
 	go elevator.Run(
-		completed_floor_chan,
-		elev_error_chan,
-		floor_reached_chan,
-		new_direction_chan,
-		door_closed_chan,
-		readDir_chan,
-		readOrder_chan,
-		start_moving_chan,
-		passing_floor_chan,
+		completedFloor,
+		floorReached,
+		newDirection,
+		doorClosed,
+		startedMoving,
+		passingFloor,
+		elevatorError,
 		resumeAfterError,
-		externalError)
+		externalError,
+		readDirection,
+		readOrder)
 
 	go manager.Run(
-		sendMsgChan,
-		recvMsgChan,
+		clickEvent,
+		sensorEvent,
+		stopBtnEvent,
+
+		completedFloor,
+		floorReached,
+		newDirection,
+		doorClosed,
+		startedMoving,
+		passingFloor,
+
+		elevatorError,
+		resumeAfterError,
+		externalError,
+
+		readDirection,
+		readOrder,
+
+		sendMsg,
+		recvMsg,
 		connected,
 		disconnected,
-		readDir_chan,
-		readOrder_chan,
-		completed_floor_chan,
-		door_closed_chan,
-		clickEvent_chan,
-		sensorEvent_chan,
-		floor_reached_chan,
-		start_moving_chan,
-		new_direction_chan,
-		passing_floor_chan,
-		elev_error_chan,
-		setNetworkStatus,
-		resumeAfterError,
-		stopButtonChan,
-		externalError)
+		setNetworkStatus)
 
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt)
@@ -88,6 +90,5 @@ func main() {
 		log.Fatal("[FATAL]\tUser terminated program")
 	}()
 
-	networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected, setNetworkStatus)
-
+	networking.NetworkLoop(sendMsg, recvMsg, connected, disconnected, setNetworkStatus)
 }

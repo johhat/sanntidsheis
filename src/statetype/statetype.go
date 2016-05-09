@@ -10,11 +10,10 @@ import (
 
 type State struct {
 	LastPassedFloor int
-	Direction       elevator.Direction_t
+	Direction       elevator.Direction
 	Moving          bool
 	Orders          Orderset
 	Valid           bool
-	SequenceNumber  int
 	DoorOpen        bool
 }
 
@@ -63,7 +62,7 @@ func (orders Orderset) IsOrder(event driver.ClickEvent) bool {
 	return orders[event.Type][event.Floor]
 }
 
-func (orders Orderset) IsOrderAhead(currentFloor int, direction elevator.Direction_t) bool {
+func (orders Orderset) IsOrderAhead(currentFloor int, direction elevator.Direction) bool {
 	for _, buttonOrders := range orders {
 		for floor, isSet := range buttonOrders {
 			if (direction == elevator.Up) && (floor > currentFloor) && isSet {
@@ -76,7 +75,7 @@ func (orders Orderset) IsOrderAhead(currentFloor int, direction elevator.Directi
 	return false
 }
 
-func (orders Orderset) IsOrderBehind(currentFloor int, direction elevator.Direction_t) bool {
+func (orders Orderset) IsOrderBehind(currentFloor int, direction elevator.Direction) bool {
 	return orders.IsOrderAhead(currentFloor, direction.OppositeDirection())
 }
 
@@ -198,7 +197,7 @@ func (state State) GetExpectedResponseTime(newOrder driver.ClickEvent) (response
 	return
 }
 
-func elevDirToDriverDir(dir elevator.Direction_t) driver.BtnType {
+func elevDirToDriverDir(dir elevator.Direction) driver.BtnType {
 	if dir == elevator.Up {
 		return driver.Up
 	} else {
@@ -221,7 +220,6 @@ func (source State) CreateCopy() (stateCopy State) {
 		source.Moving,
 		make(Orderset),
 		source.Valid,
-		source.SequenceNumber,
 		source.DoorOpen}
 	stateCopy.Orders[driver.Up] = make(FloorOrders)
 	stateCopy.Orders[driver.Down] = make(FloorOrders)

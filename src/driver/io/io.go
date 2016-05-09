@@ -1,4 +1,4 @@
-package elevatorIo
+package io
 
 /*
 	#cgo CFLAGS: -std=c11

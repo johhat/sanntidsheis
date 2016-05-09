@@ -132,7 +132,6 @@ func (c *client) SendTo() <-chan bool {
 	return signalReturn
 }
 
-//TODO: Rename, consider removing.
 func handleClients(
 	tcpClient chan<- ClientInterface,
 	addClient <-chan client,
@@ -164,8 +163,6 @@ func handleClients(
 
 func handleConnection(connection net.Conn, addClient chan<- client, rmClient chan<- client) {
 
-	//TODO: Være sikker på at man unngår minnelekkasje ved at chs.disconnect ikke stenges
-
 	client := client{
 		ip:   getRemoteIp(connection),
 		conn: connection,
@@ -177,7 +174,7 @@ func handleConnection(connection net.Conn, addClient chan<- client, rmClient cha
 		},
 	}
 
-	addClient <- client //This must happen before rmClient, i.e. no go'ing
+	addClient <- client
 
 	mergeChanDone := make(chan bool)
 	
@@ -187,7 +184,6 @@ func handleConnection(connection net.Conn, addClient chan<- client, rmClient cha
 		connection.Close()
 		log.Printf("Connection from %v closed.\n", connection.RemoteAddr())
 		rmClient <- client
-		//close(client.chs.sendMsg) //Force panic in any go-routines blocked on send to client
 		log.Println("End of TCP handleconnection for ip", client.ip)
 	}()
 
@@ -266,9 +262,7 @@ func listen(addClient chan<- client, rmClient chan<- client, stopListener <-chan
 	listener.Close()
 }
 
-func dial(request DialRequest,
-	addClient chan<- client,
-	rmClient chan<- client) {
+func dial(request DialRequest, addClient chan<- client, rmClient chan<- client) {
 
 	connection, err := net.Dial("tcp", request.Ip+tcpListenPort)
 
@@ -277,7 +271,7 @@ func dial(request DialRequest,
 	for {
 		if err != nil {
 			log.Printf("TCP dial to %s failed", request.Ip+tcpListenPort)
-			time.Sleep(500 * time.Millisecond) //TODO: Avslutte etter et visst antall forsøk? Må i så fall gi beskjed til modul om fail
+			time.Sleep(500 * time.Millisecond) 
 			connection, err = net.Dial("tcp", request.Ip+tcpListenPort)
 
 			if numTries < dialTriesLimit {
@@ -297,15 +291,10 @@ func dial(request DialRequest,
 }
 
 func getRemoteIp(connection net.Conn) string {
-	//TODO: Consider adding error checking here
 	return strings.Split(connection.RemoteAddr().String(), ":")[0]
 }
 
-//TODO: Change naming of setOnOff
-func Init(tcpClient chan<- ClientInterface,
-	tcpDial <-chan DialRequest,
-	setOnOff <-chan bool,
-	localIp string) {
+func Init(tcpClient chan<- ClientInterface, tcpDial <-chan DialRequest,setStatus <-chan bool, localIp string) {
 
 	status := true
 
@@ -320,7 +309,7 @@ func Init(tcpClient chan<- ClientInterface,
 
 	for {
 		select {
-		case setTo := <-setOnOff:
+		case setTo := <-setStatus:
 
 			if setTo == status {
 				log.Println("TCP set to its current status", status)

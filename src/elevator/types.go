@@ -8,10 +8,10 @@ type FloorOrders map[int]bool
 type Orders map[driver.BtnType]FloorOrders
 
 type ReadDirection struct {
-	Floor     int
-	Direction Direction_t
-	Request   request_t
-	Resp      chan bool
+	Floor   int
+	Dir     Direction
+	Request request_t
+	Resp    chan bool
 }
 
 type ReadOrder struct {
@@ -36,14 +36,14 @@ const (
 	IsOrderBehind
 )
 
-type Direction_t int
+type Direction int
 
 const (
-	Up Direction_t = iota
+	Up Direction = iota
 	Down
 )
 
-func (direction Direction_t) OppositeDirection() Direction_t {
+func (direction Direction) OppositeDirection() Direction {
 	if direction == Up {
 		return Down
 	} else {
@@ -51,7 +51,7 @@ func (direction Direction_t) OppositeDirection() Direction_t {
 	}
 }
 
-func (direction Direction_t) toBtnType() driver.BtnType {
+func (direction Direction) toBtnType() driver.BtnType {
 	if direction == Up {
 		return driver.Up
 	} else {

@@ -22,19 +22,18 @@ func main() {
 	simdriver.Init(clickEvent_chan, sensorEvent_chan)
 	time.Sleep(5 * time.Millisecond)
 	go elevator.Run(completed_floor_chan, missed_deadline_chan, floor_reached_chan, clickEvent_chan, new_direction_chan)
-	go func(s_event, floor_reached chan int){
-		for{
-			floor := <- s_event
-			if floor != -1{
+	go func(s_event, floor_reached chan int) {
+		for {
+			floor := <-s_event
+			if floor != -1 {
 				floor_reached <- floor
 			}
 		}
 	}(sensorEvent_chan, floor_reached_chan)
 
-	for{
+	for {
 		time.Sleep(10 * time.Millisecond)
 
 	}
 
-	
 }

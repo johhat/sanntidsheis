@@ -46,9 +46,8 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	clients := make(map[string]tcp.ClientInterface)
 
 	//UDP
-	var stopUdpHeartbeats chan<- bool
 	udpBroadcastMsg, udpRecvMsg := udp.Init(localIp)
-	stopUdpHeartbeats = udpSendHeartbeats(udpBroadcastMsg)
+	stopUdpHeartbeats := udpSendHeartbeats(udpBroadcastMsg)
 
 	//TCP
 	tcpClient := make(chan tcp.ClientInterface)

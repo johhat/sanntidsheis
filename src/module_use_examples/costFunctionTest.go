@@ -1,11 +1,12 @@
 package main
 
-import(
-	"fmt"
-	"../statetype"
+import (
 	"../elevator"
 	"../simdriver"
+	"../statetype"
+	"fmt"
 )
+
 /*
 	stopTime float32 = 3
 	floorTravelTime float32 = 2
@@ -18,30 +19,29 @@ import(
 
 */
 
-func main(){
+func main() {
 	//Create test state
-	upOrders := statetype.FloorOrders{0:false , 1: false, 2: false}
+	upOrders := statetype.FloorOrders{0: false, 1: false, 2: false}
 	downOrders := statetype.FloorOrders{1: false, 2: false, 3: false}
 	CmdOrders := statetype.FloorOrders{0: false, 1: false, 2: false, 3: false}
 	orders := statetype.Orderset{
-		simdriver.Up: upOrders,
-		simdriver.Down: downOrders,
+		simdriver.Up:      upOrders,
+		simdriver.Down:    downOrders,
 		simdriver.Command: CmdOrders}
 	testState := statetype.State{
-		0, // Last passed floor
+		0,           // Last passed floor
 		elevator.Up, // Defined direction
-		false, //moving
+		false,       //moving
 		orders,
-		true, //valid
-		0, //Sequence number
+		true,  //valid
+		0,     //Sequence number
 		false} // Door open
 
 	//Create new test order
-	newOrder := simdriver.ClickEvent{3,simdriver.Down}
+	newOrder := simdriver.ClickEvent{3, simdriver.Down}
 
 	//Calculate times
 	response := testState.GetExpectedResponseTime(newOrder)
-	fmt.Println("Response time:",response)
+	fmt.Println("Response time:", response)
 
-	
 }

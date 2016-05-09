@@ -1,7 +1,7 @@
 package driver
 
 import (
-	io "./elevatorIo"
+	"./io"
 	"log"
 	"os"
 	"time"
@@ -79,8 +79,15 @@ func init() {
 
 	SetMotorDirection(MotorDown)
 
+	timeout := time.After(10 * time.Second)
+
 	for GetFloorSensorSignal() == InvalidFloor {
-		//TODO: Add timeout
+		select {
+		case <-timeout:
+			log.Fatal("Timeout in driver. Did not get to valid floor in time.")
+			os.Exit(1)
+		default:
+		}
 	}
 
 	SetFloorIndicator(GetFloorSensorSignal())

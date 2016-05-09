@@ -28,7 +28,6 @@ func ipToInt(ip string) (int, error) {
 	ipParts := strings.SplitAfter(ip, ".")
 
 	if len(ipParts) != 4 {
-		//TODO: Return string with ip
 		return 0, errors.New("Malformed ip error")
 	}
 
