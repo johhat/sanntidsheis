@@ -19,7 +19,6 @@ type unconfirmedOrder struct {
 
 var localIp string
 
-
 func Run(
 	send_chan chan<- com.Message,
 	receive_chan <-chan com.Message,
@@ -72,7 +71,10 @@ func Run(
 				send_chan <- com.OrderEventMsg{msg.Button, states[localIp].CreateCopy(), localIp}
 
 			case com.OrderEventMsg:
-				//Sanity check av state-endring
+				if msg.NewState.SequenceNumber <= states[msg.Sender].SequenceNumber {
+					fmt.Println("Received OrderEventMsg with nonincreasing sequence number")
+					break
+				}
 				delete(unconfirmedOrders, unconfirmedOrder{msg.Button, msg.Sender})
 				delete(redistributedOrders, msg.Button)
 				states[msg.Sender].Orders.AddOrder(msg.Button)
@@ -80,7 +82,10 @@ func Run(
 					driver.SetBtnLamp(msg.Button.Floor, msg.Button.Type, true)
 				}
 			case com.SensorEventMsg:
-				//Sanity check av state-endring
+				if msg.NewState.SequenceNumber <= states[msg.Sender].SequenceNumber {
+					fmt.Println("Received SensorEventMsg with nonincreasing sequence number")
+					break
+				}
 				tmp := states[msg.Sender]
 				if msg.Type == com.StoppingToFinishOrder {
 					driver.SetBtnLamp(msg.NewState.LastPassedFloor, driver.Up, false)
@@ -94,7 +99,6 @@ func Run(
 				tmp.DoorOpen = msg.NewState.DoorOpen
 				states[msg.Sender] = tmp
 			case com.InitialStateMsg:
-				//Sanity check av state-endring
 				if _, ok := states[msg.Sender]; !ok {
 					fmt.Println("Manager error: Received InitialStateMsg without first getting message on connected_chan")
 					break
@@ -113,7 +117,7 @@ func Run(
 				tmp.Valid = true
 				states[msg.Sender] = tmp
 				statetype.DeepOrdersetCopy(msg.NewState.Orders, states[msg.Sender].Orders)
-				for btnType, floorOrders := range states[msg.Sender].Orders{
+				for btnType, floorOrders := range states[msg.Sender].Orders {
 					if btnType != driver.Command {
 						for floor, isSet := range floorOrders {
 							if isSet {
@@ -177,11 +181,11 @@ func Run(
 
 			highestIp := getHighestIp(states)
 			secondHighestIp, ok := getSecondHighestIp(states)
-			fmt.Println("\033[34m"+"\tManager: highest ip:",highestIp,"secondHighestIp:",secondHighestIp,"\033[0m")
+			fmt.Println("\033[34m"+"\tManager: highest ip:", highestIp, "secondHighestIp:", secondHighestIp, "\033[0m")
 			if disconnected == highestIp && localIp == secondHighestIp && ok {
 				//redistribute redistributed orders
-				fmt.Println("\033[34m"+"Manager: highest ip disconnected, redistributing redistributed orders"+"\033[0m")
-				for button := range redistributedOrders{
+				fmt.Println("\033[34m" + "Manager: highest ip disconnected, redistributing redistributed orders" + "\033[0m")
+				for button := range redistributedOrders {
 					delete(redistributedOrders, button)
 					go func(btnClick driver.ClickEvent) {
 						clickEvent_chan <- btnClick
@@ -274,12 +278,12 @@ func Run(
 			}
 
 		case sensorEvent := <-sensorEvent_chan:
-			if error_state{
+			if error_state {
 				break
 			}
 			fmt.Println("\033[34m"+"Sensorevent", sensorEvent, "\033[0m")
 			if sensorEvent == -1 && !states[localIp].Moving {
-				fmt.Println("\033[34m"+"Manager: left floor without moving"+"\033[0m")
+				fmt.Println("\033[34m" + "Manager: left floor without moving" + "\033[0m")
 				go func() {
 					externalError <- true
 				}()
@@ -351,21 +355,21 @@ func getSecondHighestIp(states map[string]statetype.State) (string, bool) {
 	ipMap := make(map[int]string)
 	for ip, _ := range states {
 		ipParts := strings.SplitAfter(ip, ".")
-		
+
 		if len(ipParts) != 4 {
-			return "",false
+			return "", false
 		}
 
 		ip_int, err := strconv.Atoi(ipParts[3])
 
-		if err!=nil {
-			return "",false
+		if err != nil {
+			return "", false
 		}
 
 		ipMap[ip_int] = ip
 		ips = append(ips, ip_int)
 	}
-	if len(ips) < 2{
+	if len(ips) < 2 {
 		return "", false
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(ips)))
