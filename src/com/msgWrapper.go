@@ -11,18 +11,19 @@ type wrappedMessage struct {
 	MsgType string
 }
 
-func (wrapped wrappedMessage) Encode() ([]byte, error) {
+func (wrapped wrappedMessage) encode() ([]byte, error) {
 	return json.Marshal(wrapped)
 }
 
-func WrapMessage(message Message) wrappedMessage {
-
-	w := wrappedMessage{
+func wrapMessage(message Message) wrappedMessage {
+	return wrappedMessage{
 		Msg:     message,
 		MsgType: message.MsgType(),
 	}
+}
 
-	return w
+func EncodeMessage(message Message) ([]byte, error) {
+	return wrapMessage(message).encode()
 }
 
 func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Message, error) {
@@ -63,7 +64,7 @@ func unmarshallToMessage(msgJSON *json.RawMessage, msgType, senderIp string) (Me
 	return m, err
 }
 
-func DecodeWrappedMessage(data []byte, senderIp string) (Message, error) {
+func DecodeMessage(data []byte, senderIp string) (Message, error) {
 
 	var err error
 

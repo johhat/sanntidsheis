@@ -130,7 +130,7 @@ func handleTCPClient(client tcp.ClientInterface,
 				continue
 			}
 
-			decodedMsg, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+			decodedMsg, err := com.DecodeMessage(rawMsg.Data, rawMsg.Ip)
 
 			if err != nil {
 				log.Println("Error when decoding TCP msg:", err, string(rawMsg.Data), "Sender:", rawMsg.Ip)
@@ -141,7 +141,7 @@ func handleTCPClient(client tcp.ClientInterface,
 
 		case <-client.IsDisconnected:
 			for rawMsg := range client.RecvMsg {
-				decodedMsg, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+				decodedMsg, err := com.DecodeMessage(rawMsg.Data, rawMsg.Ip)
 
 				if err != nil {
 					log.Println("Error when decoding TCP msg:", err, "Data:", string(rawMsg.Data), "Sender:", rawMsg.Ip)
@@ -172,7 +172,7 @@ func handleTcpSendMsg(msg com.Message, clients map[string]tcp.ClientInterface) {
 			return
 		}
 
-		data, err := com.WrapMessage(msg).Encode()
+		data, err := com.EncodeMessage(msg)
 
 		if err != nil {
 			log.Println("Error when encoding msg in handleTcpSendMsg. Ignoring msg. Err:", err, "Msg:", msg)
@@ -189,7 +189,7 @@ func handleTcpSendMsg(msg com.Message, clients map[string]tcp.ClientInterface) {
 
 	case com.Message:
 
-		data, err := com.WrapMessage(msg).Encode()
+		data, err := com.EncodeMessage(msg)
 
 		if err != nil {
 			log.Println("Error when encoding msg in handleTcpSendMsg. Ignoring msg. Err:", err, "Msg:", msg)
@@ -217,7 +217,7 @@ func handleUDPRecvMsg(rawMsg udp.RawMessage,
 	tcpDial chan<- tcp.DialRequest,
 	tcpDialFail chan<- string) {
 
-	m, err := com.DecodeWrappedMessage(rawMsg.Data, rawMsg.Ip)
+	m, err := com.DecodeMessage(rawMsg.Data, rawMsg.Ip)
 
 	if err != nil {
 		log.Println("Error when decoding udp msg:", err, string(rawMsg.Data))

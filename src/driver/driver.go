@@ -1,7 +1,7 @@
 package driver
 
 import (
-	. "./elevatorIo"
+	io "./elevatorIo"
 	"log"
 	"os"
 	"time"
@@ -15,7 +15,7 @@ const (
 	PollInterval = 1 * time.Millisecond
 )
 
-func pollFloorSensor(sensorEventChan chan int) {
+func pollFloorSensor(sensorEventChan chan<- int) {
 
 	state := -1
 
@@ -30,7 +30,7 @@ func pollFloorSensor(sensorEventChan chan int) {
 	}
 }
 
-func pollButtons(clickEventChan chan ClickEvent) {
+func pollButtons(clickEventChan chan<- ClickEvent) {
 
 	var isPressed [NumBtnTypes][NumFloors]bool
 
@@ -51,22 +51,22 @@ func pollButtons(clickEventChan chan ClickEvent) {
 	}
 }
 
-func pollStopButton(stopButtonChan chan bool) {
-	pressed := false
-	for {
-		if !pressed && getStopSignal() {
-			pressed = true
+func pollStopButton(stopButtonChan chan<- bool) {
+	isPressed := false
+
+	if isPressed != getStopBtnSignal() {
+		isPressed = !isPressed
+
+		if isPressed {
 			stopButtonChan <- true
-		} else if !getStopSignal() {
-			pressed = false
 		}
-		time.Sleep(PollInterval)
 	}
+	time.Sleep(PollInterval)
 }
 
 func init() {
 
-	err := InitializeElevatorIo()
+	err := io.Init()
 
 	if err != nil {
 		log.Fatal(err)
@@ -88,7 +88,7 @@ func init() {
 	SetMotorDirection(MotorStop)
 }
 
-func Init(clickEventChan chan ClickEvent, sensorEventChan chan int, stopButtonChan chan bool) {
+func Init(clickEventChan chan<- ClickEvent, sensorEventChan chan<- int, stopButtonChan chan<- bool) {
 	go pollFloorSensor(sensorEventChan)
 	go pollButtons(clickEventChan)
 	go pollStopButton(stopButtonChan)
@@ -118,7 +118,7 @@ func getBtnSignal(floor int, button BtnType) bool {
 
 	switch button {
 	case Up, Down, Command:
-		return ReadBit(buttonChannels[floor][int(button)]) != 0
+		return io.ReadBit(buttonChannels[floor][int(button)]) != 0
 	default:
 		log.Println("Tried to get signal form non-existent btn")
 		return false
@@ -127,52 +127,48 @@ func getBtnSignal(floor int, button BtnType) bool {
 
 func GetFloorSensorSignal() int {
 	switch {
-	case ReadBit(SENSOR_FLOOR1) != 0:
+	case io.ReadBit(SENSOR_FLOOR1) != 0:
 		return 0
-	case ReadBit(SENSOR_FLOOR2) != 0:
+	case io.ReadBit(SENSOR_FLOOR2) != 0:
 		return 1
-	case ReadBit(SENSOR_FLOOR3) != 0:
+	case io.ReadBit(SENSOR_FLOOR3) != 0:
 		return 2
-	case ReadBit(SENSOR_FLOOR4) != 0:
+	case io.ReadBit(SENSOR_FLOOR4) != 0:
 		return 3
 	default:
 		return -1
 	}
 }
 
-func getStopSignal() bool {
-	return ReadBit(STOP) == 1
-}
-
-func getObstructionSignal() bool {
-	return ReadBit(OBSTRUCTION) == 1
+func getStopBtnSignal() bool {
+	return io.ReadBit(STOP) == 1
 }
 
 func SetMotorDirection(direction MotorDirection) {
 	switch direction {
 	case MotorDown:
-		SetBit(MOTORDIR)
-		WriteAnalog(MOTOR, MotorSpeed)
+		io.SetBit(MOTORDIR)
+		io.WriteAnalog(MOTOR, MotorSpeed)
 	case MotorStop:
-		WriteAnalog(MOTOR, 0)
+		io.WriteAnalog(MOTOR, 0)
 	case MotorUp:
-		ClearBit(MOTORDIR)
-		WriteAnalog(MOTOR, MotorSpeed)
+		io.ClearBit(MOTORDIR)
+		io.WriteAnalog(MOTOR, MotorSpeed)
 	}
 }
 
 func SetFloorIndicator(floor int) {
 	if floor&0x02 != 0 {
-		SetBit(LIGHT_FLOOR_IND1)
+		io.SetBit(LIGHT_FLOOR_IND1)
 	} else {
-		ClearBit(LIGHT_FLOOR_IND1)
+		io.ClearBit(LIGHT_FLOOR_IND1)
 	}
 
 	if floor&0x01 != 0 {
-		SetBit(LIGHT_FLOOR_IND2)
+		io.SetBit(LIGHT_FLOOR_IND2)
 
 	} else {
-		ClearBit(LIGHT_FLOOR_IND2)
+		io.ClearBit(LIGHT_FLOOR_IND2)
 	}
 }
 
@@ -188,9 +184,9 @@ func SetBtnLamp(floor int, btn BtnType, setTo bool) {
 	switch btn {
 	case Up, Down, Command:
 		if setTo {
-			SetBit(lightChannels[floor][int(btn)])
+			io.SetBit(lightChannels[floor][int(btn)])
 		} else {
-			ClearBit(lightChannels[floor][int(btn)])
+			io.ClearBit(lightChannels[floor][int(btn)])
 		}
 	default:
 		log.Println("Btn type failure in SetBtnLamp. Floor: ", floor)
@@ -199,16 +195,16 @@ func SetBtnLamp(floor int, btn BtnType, setTo bool) {
 
 func SetStopLamp(setTo bool) {
 	if setTo {
-		SetBit(LIGHT_STOP)
+		io.SetBit(LIGHT_STOP)
 	} else {
-		ClearBit(LIGHT_STOP)
+		io.ClearBit(LIGHT_STOP)
 	}
 }
 
 func SetDoorOpenLamp(setTo bool) {
 	if setTo {
-		SetBit(LIGHT_DOOR_OPEN)
+		io.SetBit(LIGHT_DOOR_OPEN)
 	} else {
-		ClearBit(LIGHT_DOOR_OPEN)
+		io.ClearBit(LIGHT_DOOR_OPEN)
 	}
 }

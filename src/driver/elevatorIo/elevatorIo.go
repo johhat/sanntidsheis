@@ -20,7 +20,7 @@ const (
 
 var once sync.Once
 
-func InitializeElevatorIo() error {
+func Init() error {
 
 	var err error
 
@@ -37,7 +37,6 @@ func InitializeElevatorIo() error {
 		} else {
 			err = nil
 		}
-
 	})
 
 	return err

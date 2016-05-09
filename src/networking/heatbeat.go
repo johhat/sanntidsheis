@@ -17,12 +17,12 @@ func udpSendHeartbeats(udpBroadcastMsg chan<- []byte) chan<- bool {
 		for {
 			select {
 			case <-udpHeatbeatTick:
-				m := com.CreateHeartbeat(udpHeartbeatNum)
+				msg := com.CreateHeartbeat(udpHeartbeatNum)
 
-				data, err := com.WrapMessage(m).Encode()
+				data, err := com.EncodeMessage(msg)
 
 				if err != nil {
-					log.Println("Error when encoding Heartbeat. Err:", err, ". Message:", m)
+					log.Println("Error when encoding Heartbeat. Err:", err, ". Message:", msg)
 				}
 
 				udpBroadcastMsg <- data
@@ -37,7 +37,6 @@ func udpSendHeartbeats(udpBroadcastMsg chan<- []byte) chan<- bool {
 
 func registerHeartbeat(heartbeats map[string]int, heartbeatNum int, sender string, connectionType string) {
 
-	//TODO: Clear array on disconnect
 	prev, ok := heartbeats[sender]
 
 	if !ok {
