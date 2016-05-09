@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"time"
 )
 
 func main() {
@@ -88,5 +87,4 @@ func main() {
 	}()
 
 	networking.Run(sendMsg, recvMsg, connected, disconnected, setNetworkStatus)
-
 }
