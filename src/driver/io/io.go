@@ -10,7 +10,6 @@ import "C"
 
 import (
 	"errors"
-	"log"
 	"sync"
 )
 
@@ -29,8 +28,6 @@ func Init() error {
 	once.Do(func() {
 
 		status := C.io_init()
-
-		log.Println("Status in init elev io:", status)
 
 		if status == InitFailureCode {
 			err = errors.New("Init of elevator IO failed.")

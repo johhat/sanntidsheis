@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"time"
 )
 
 func main() {
@@ -86,5 +87,13 @@ func main() {
 		log.Fatal("[FATAL]\tUser terminated program")
 	}()
 
-	networking.NetworkLoop(sendMsg, recvMsg, connected, disconnected, setNetworkStatus)
+	go func(){
+	<- time.After(5 * time.Second)
+	setNetworkStatus <- false
+
+		}()
+
+
+	networking.Run(sendMsg, recvMsg, connected, disconnected, setNetworkStatus)
+
 }

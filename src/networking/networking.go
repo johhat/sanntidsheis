@@ -26,37 +26,34 @@ func init() {
 	localIp, err = getLocalIp()
 
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Refusing to start - ",err)
 	}
 }
 
-func NetworkLoop(sendMsgChan <-chan com.Message,
+func Run(sendMsgChan <-chan com.Message,
 	recvMsgChan chan<- com.Message,
 	connectedChan,
 	disconnectedChan chan<- string,
 	setStatus <-chan bool) {
 
-	log.Println("---Init network loop---")
+	log.Println("---Starting network loop---")
 	log.Println("The ip of this computer is: ", localIp)
 
-	//Mutable states
 	status := true
 	connectionStatuses := make(map[string]connectionStatus)
 	heartbeats := make(map[string]int)
 	clients := make(map[string]tcp.ClientInterface)
 
-	//UDP
 	udpBroadcastMsg, udpRecvMsg := udp.Init(localIp)
 	stopUdpHeartbeats := udpSendHeartbeats(udpBroadcastMsg)
 
-	//TCP
 	tcpClient := make(chan tcp.ClientInterface)
 	clientDisconnected := make(chan string)
-	setTCPStatus := make(chan bool)
+	setTcpStatus := make(chan bool)
 	tcpDial := make(chan tcp.DialRequest)
 	tcpDialFail := make(chan string)
 
-	go tcp.Init(tcpClient, tcpDial, setTCPStatus, localIp)
+	go tcp.Init(tcpClient, tcpDial, setTcpStatus, localIp)
 
 	for {
 		select {
@@ -64,7 +61,7 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 			handleTcpSendMsg(msg, clients)
 		case rawMsg := <-udpRecvMsg:
 			if status {
-				handleUDPRecvMsg(rawMsg, connectionStatuses, heartbeats, tcpDial, tcpDialFail)
+				handleUdpRecvMsg(rawMsg, connectionStatuses, heartbeats, tcpDial, tcpDialFail)
 			}
 		case ip := <-tcpDialFail:
 			delete(connectionStatuses, ip)
@@ -73,15 +70,15 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 			status, ok := connectionStatuses[newClient.Ip]
 
 			if ok && status == connected {
-				//TODO: Tenk gjennom om dette er et scenario som kan skje - for i så fall er det ugreit
 				log.Println("Network module add new client: Client allready registered as connected")
+				clients[newClient.Ip] = newClient
 				continue
 			}
 
 			connectionStatuses[newClient.Ip] = connected
 			clients[newClient.Ip] = newClient
 
-			go handleTCPClient(newClient, recvMsgChan, connectedChan, clientDisconnected)
+			go handleTcpClient(newClient, recvMsgChan, connectedChan, clientDisconnected)
 
 		case disconnectedClient := <-clientDisconnected:
 			disconnectedChan <- disconnectedClient
@@ -90,13 +87,13 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 			delete(heartbeats, disconnectedClient)
 		case newStatus := <-setStatus:
 			if newStatus == status {
-				log.Println("Tried to set network module to its current status", status)
+				log.Println("Tried to set network module to its current status:", status)
 				continue
 			}
 
 			status = newStatus
 
-			setTCPStatus <- status
+			setTcpStatus <- status
 
 			if status {
 				log.Println("Setting network module to active")
@@ -109,7 +106,7 @@ func NetworkLoop(sendMsgChan <-chan com.Message,
 	}
 }
 
-func handleTCPClient(client tcp.ClientInterface,
+func handleTcpClient(client tcp.ClientInterface,
 	recvMsg chan<- com.Message,
 	connectedChan,
 	clientDisconnected chan<- string) {
@@ -151,7 +148,7 @@ func handleTCPClient(client tcp.ClientInterface,
 			}
 
 			clientDisconnected <- client.Ip
-			log.Println("End of handleTCPCLient for ip", client.Ip)
+			log.Println("End of handleTcpCLient for ip", client.Ip)
 			return
 		}
 	}
@@ -210,7 +207,7 @@ func handleTcpSendMsg(msg com.Message, clients map[string]tcp.ClientInterface) {
 	}
 }
 
-func handleUDPRecvMsg(rawMsg udp.RawMessage,
+func handleUdpRecvMsg(rawMsg udp.RawMessage,
 	connectionStatuses map[string]connectionStatus,
 	heartbeats map[string]int,
 	tcpDial chan<- tcp.DialRequest,

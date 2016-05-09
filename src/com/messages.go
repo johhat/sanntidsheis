@@ -10,6 +10,7 @@ type Message interface {
 	GetSenderIp() string
 }
 
+
 type DirectedMessage interface {
 	GetRecieverIp() string
 	Message

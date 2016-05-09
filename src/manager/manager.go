@@ -23,21 +23,17 @@ func Run(
 	clickEvent chan driver.ClickEvent,
 	sensorEvent <-chan int,
 	stopBtnEvent <-chan bool,
-
 	completedFloor <-chan int,
 	floorReached chan<- int,
 	newDirection <-chan elevator.Direction,
 	doorClosed <-chan bool,
 	startedMoving <-chan bool,
 	passingFloor <-chan bool,
-
 	elevatorError chan bool,
 	resumeAfterError chan<- bool,
 	externalError chan<- bool,
-
 	readDirection <-chan elevator.ReadDirection,
 	readOrder <-chan elevator.ReadOrder,
-
 	sendMsg chan<- com.Message,
 	recvMsg <-chan com.Message,
 	connected <-chan string,
@@ -50,9 +46,7 @@ func Run(
 	unconfirmedOrders := make(map[unconfirmedOrder]bool)
 	redistributedOrders := make(map[driver.ClickEvent]bool)
 
-	//Initialize queue
 	states := make(map[string]state.State)
-
 	initializeState(states, localIp)
 
 	states[localIp].Orders.Init()

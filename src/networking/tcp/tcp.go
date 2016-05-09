@@ -16,7 +16,7 @@ const (
 
 	readTimeout                   = 1 * time.Second
 	heartbeatRate                 = readTimeout / 4
-	heartbeatMessage              = "TCP-HEARTBEAT" //TODO: Declare as byte array
+	heartbeatMessage              = "TCP-HEARTBEAT"
 	heartbeatMessageRecvFormat    = heartbeatMessage + "\n"
 	lenHeartbeatMessageRecvFormat = len(heartbeatMessageRecvFormat)
 )
@@ -250,7 +250,12 @@ func listen(addClient chan<- client, rmClient chan<- client, stopListener <-chan
 
 			if err != nil {
 				log.Println("Error in TCP listener:", err)
-				return //TODO: Return only if closed else continue
+
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					return
+				} else {
+					continue
+				}
 			}
 
 			log.Printf("Handling incoming connection from %v", connection.RemoteAddr())
