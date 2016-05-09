@@ -10,7 +10,7 @@ type Orders map[driver.BtnType]FloorOrders
 type ReadDirection struct {
 	Floor   int
 	Dir     Direction
-	Request request_t
+	Request request
 	Resp    chan bool
 }
 
@@ -19,22 +19,27 @@ type ReadOrder struct {
 	Resp  chan bool
 }
 
-type state_t int
+
+
+type state int
 
 const (
-	atFloor state_t = iota
+	atFloor state = iota
 	doorOpen
 	movingBetween
 	errorState
 	reInitState
 )
 
-type request_t int
+
+type request int
 
 const (
-	IsOrderAhead request_t = iota
+	IsOrderAhead request = iota
 	IsOrderBehind
 )
+
+
 
 type Direction int
 

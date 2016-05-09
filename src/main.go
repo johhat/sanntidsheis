@@ -87,13 +87,6 @@ func main() {
 		log.Fatal("[FATAL]\tUser terminated program")
 	}()
 
-	go func(){
-	<- time.After(5 * time.Second)
-	setNetworkStatus <- false
-
-		}()
-
-
 	networking.Run(sendMsg, recvMsg, connected, disconnected, setNetworkStatus)
 
 }

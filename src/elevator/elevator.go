@@ -12,10 +12,10 @@ const (
 	doorPeriod     = 3 * time.Second
 )
 
-var current_direction Direction = Up
+var currentDirection Direction = Up
 
 func GetCurrentDirection() Direction {
-	return current_direction
+	return currentDirection
 }
 
 func Run(
@@ -35,12 +35,12 @@ func Run(
 
 	deadlineTimer := time.NewTimer(deadlinePeriod)
 	deadlineTimer.Stop()
-
 	doorTimer := time.NewTimer(doorPeriod)
 	doorTimer.Stop()
 
 	state := atFloor
 	lastPassedFloor := driver.GetFloorSensorSignal()
+	
 	if lastPassedFloor == -1 {
 		log.Fatal("[FATAL]\tElevator initializing between floors")
 	}
@@ -60,7 +60,7 @@ func Run(
 		case atFloor:
 			readOrders <- ReadOrder{driver.ClickEvent{lastPassedFloor, driver.Command}, readResult}
 			internal0rderAtThisFloor := <-readResult
-			readOrders <- ReadOrder{driver.ClickEvent{lastPassedFloor, current_direction.toBtnType()}, readResult}
+			readOrders <- ReadOrder{driver.ClickEvent{lastPassedFloor, currentDirection.toBtnType()}, readResult}
 			orderForwardAtThisFloor := <-readResult
 
 			if internal0rderAtThisFloor || orderForwardAtThisFloor {
@@ -75,7 +75,7 @@ func Run(
 				break
 			}
 
-			readDirection <- ReadDirection{lastPassedFloor, current_direction, IsOrderAhead, readResult}
+			readDirection <- ReadDirection{lastPassedFloor, currentDirection, IsOrderAhead, readResult}
 			orderAhead := <-readResult
 
 			if orderAhead {
@@ -83,7 +83,7 @@ func Run(
 				if isPassingFloor {
 					passingFloor <- true
 				}
-				switch current_direction {
+				switch currentDirection {
 				case Up:
 					driver.SetMotorDirection(driver.MotorUp)
 					fmt.Println("\033[31m" + "Elevator: moving up" + "\033[0m")
@@ -98,15 +98,15 @@ func Run(
 
 			}
 
-			readDirection <- ReadDirection{lastPassedFloor, current_direction, IsOrderBehind, readResult}
+			readDirection <- ReadDirection{lastPassedFloor, currentDirection, IsOrderBehind, readResult}
 			orderBehind := <-readResult
-			readOrders <- ReadOrder{driver.ClickEvent{lastPassedFloor, current_direction.OppositeDirection().toBtnType()}, readResult}
+			readOrders <- ReadOrder{driver.ClickEvent{lastPassedFloor, currentDirection.OppositeDirection().toBtnType()}, readResult}
 			orderBackwardAtThisFloor := <-readResult
 
 			if orderBehind || orderBackwardAtThisFloor {
 				fmt.Println("\033[31m" + "Elevator: Changing direction" + "\033[0m")
-				current_direction = current_direction.OppositeDirection()
-				newDirection <- current_direction
+				currentDirection = currentDirection.OppositeDirection()
+				newDirection <- currentDirection
 			}
 
 		case doorOpen:
@@ -117,7 +117,7 @@ func Run(
 		case movingBetween:
 			select {
 			case floor := <-floorReached:
-				if ((current_direction == Up) && (floor != lastPassedFloor+1)) || ((current_direction == Down) && (floor != lastPassedFloor-1)) {
+				if ((currentDirection == Up) && (floor != lastPassedFloor+1)) || ((currentDirection == Down) && (floor != lastPassedFloor-1)) {
 					fmt.Println("\033[31m" + "Elevator: missed floor signal, entering error state" + "\033[0m")
 					driver.SetMotorDirection(driver.MotorStop)
 					elevatorError <- true
@@ -153,7 +153,7 @@ func Run(
 			<-resumeAfterError
 			if driver.GetFloorSensorSignal() == driver.InvalidFloor {
 				startedMoving <- true
-				switch current_direction {
+				switch currentDirection {
 				case Up:
 					driver.SetMotorDirection(driver.MotorUp)
 				case Down:

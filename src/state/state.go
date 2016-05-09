@@ -52,7 +52,6 @@ func DeleteSavedOrder(floor int) {
 
 func (orders Orderset) IsOrder(event driver.ClickEvent) bool {
 	if event.Floor < 0 || event.Floor > driver.NumFloors-1 {
-		//fmt.Println("Attempted to check order for non-existing floor")
 		return false
 	} else if event.Type == driver.Up && event.Floor == driver.NumFloors-1 {
 		return false
@@ -114,7 +113,6 @@ func (orders Orderset) AddOrder(order driver.ClickEvent) {
 		}
 	}
 	orders[order.Type][order.Floor] = true
-	//driver.SetBtnLamp(order.Floor, order.Type, true)
 }
 
 func (orders Orderset) ClearOrders(floor int) {
@@ -139,13 +137,12 @@ func (state State) GetExpectedResponseTime(newOrder driver.ClickEvent) (response
 		return
 	}
 
-	//Initialize variables
 	responseTime = 0
-
 	currentOrders := state.CreateCopy().Orders
 	currentOrders.AddOrder(newOrder)
 	currentDirection := state.Direction
 	currentFloor := state.LastPassedFloor
+
 	if state.Moving {
 		if state.Direction == elevator.Up {
 			currentFloor += 1
@@ -188,8 +185,7 @@ func (state State) GetExpectedResponseTime(newOrder driver.ClickEvent) (response
 			currentDirection = currentDirection.OppositeDirection()
 			fmt.Printf("-> Turn around ")
 		} else {
-			//No orders left, to prevent erronous infinite loop this must be catched
-			fmt.Println("Stuck forever ...")
+			break
 		}
 	}
 

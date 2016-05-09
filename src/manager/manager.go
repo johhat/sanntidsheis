@@ -29,7 +29,7 @@ func Run(
 	doorClosed <-chan bool,
 	startedMoving <-chan bool,
 	passingFloor <-chan bool,
-	elevatorError chan bool,
+	elevatorError <-chan bool,
 	resumeAfterError chan<- bool,
 	externalError chan<- bool,
 	readDirection <-chan elevator.ReadDirection,
