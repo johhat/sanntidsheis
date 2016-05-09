@@ -20,22 +20,17 @@ func (orderSet Orderset) MarshalJSON() ([]byte, error) {
 }
 
 func (orderSet *Orderset) UnmarshalJSON(data []byte) error {
-	var err error
 
 	auxMap := make(map[string]FloorOrders)
-	err = json.Unmarshal(data, &auxMap)
-
+	err := json.Unmarshal(data, &auxMap)
 	resultMap := make(Orderset)
 
 	if err != nil {
 		return err
 	}
 
-	var newKey int
-
 	for key, val := range auxMap {
-
-		newKey, err = strconv.Atoi(key)
+		newKey, err := strconv.Atoi(key)
 
 		if err != nil {
 			return err

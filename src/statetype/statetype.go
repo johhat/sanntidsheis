@@ -1,7 +1,7 @@
 package statetype
 
 import (
-	driver "../driver"
+	"../driver"
 	"../elevator"
 	"fmt"
 	"os"
