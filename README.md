@@ -6,7 +6,6 @@ Heisprosjekt i TTK4145 Sanntidsprogrammering
 - Manager
 - Heis
 - Driver
-- Trygg lagring
 
 ### Samarbeidende heiser
 - Valg av strategi med 1, 2 og 3 heiser i systemet (prinsipielt n heiser)
