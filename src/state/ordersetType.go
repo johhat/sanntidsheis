@@ -1,7 +1,7 @@
-package statetype
+package state
 
 import (
-	driver "../driver"
+	"../driver"
 	"encoding/json"
 	"strconv"
 )

@@ -1,4 +1,4 @@
-package statetype
+package state
 
 import (
 	"encoding/json"

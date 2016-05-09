@@ -2,12 +2,8 @@ package com
 
 import (
 	"../driver"
-	s "../statetype"
+	"../state"
 )
-
-//
-// Msg interfaces
-//
 
 type Message interface {
 	MsgType() string
@@ -19,13 +15,10 @@ type DirectedMessage interface {
 	Message
 }
 
-//
-// Click Event Msg implementation
-//
 
 type OrderEventMsg struct {
 	Button   driver.ClickEvent
-	NewState s.State
+	NewState state.State
 	Sender   string
 }
 
@@ -37,13 +30,10 @@ func (m OrderEventMsg) GetSenderIp() string {
 	return m.Sender
 }
 
-//
-// Sensor Event Msg implementation
-//
 
 type SensorEventMsg struct {
 	Type     EventType
-	NewState s.State
+	NewState state.State
 	Sender   string
 }
 
@@ -55,12 +45,9 @@ func (m SensorEventMsg) GetSenderIp() string {
 	return m.Sender
 }
 
-//
-// Initial s.State Msg implementation
-//
 
 type InitialStateMsg struct {
-	NewState s.State
+	NewState state.State
 	Sender   string
 }
 
@@ -72,9 +59,6 @@ func (m InitialStateMsg) GetSenderIp() string {
 	return m.Sender
 }
 
-//
-// Heartbeat Msg implementation
-//
 
 const HeartbeatCode = "SecretString"
 
@@ -96,9 +80,6 @@ func (m Heartbeat) GetSenderIp() string {
 	return m.Sender
 }
 
-//
-// Order Assignment Directed msg implementation
-//
 
 type OrderAssignmentMsg struct {
 	Button   driver.ClickEvent

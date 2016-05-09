@@ -5,7 +5,7 @@ import (
 	"../driver"
 	"../elevator"
 	"../networking"
-	"../statetype"
+	"../state"
 	"fmt"
 	"sort"
 	"strconv"
@@ -51,7 +51,7 @@ func Run(
 	redistributedOrders := make(map[driver.ClickEvent]bool)
 
 	//Initialize queue
-	states := make(map[string]statetype.State)
+	states := make(map[string]state.State)
 
 	initializeState(states, localIp)
 
@@ -86,7 +86,7 @@ func Run(
 					driver.SetBtnLamp(msg.NewState.LastPassedFloor, driver.Up, false)
 					driver.SetBtnLamp(msg.NewState.LastPassedFloor, driver.Down, false)
 				}
-				statetype.DeepOrdersetCopy(msg.NewState.Orders, tmpState.Orders)
+				state.DeepOrdersetCopy(msg.NewState.Orders, tmpState.Orders)
 				tmpState.Direction = msg.NewState.Direction
 				tmpState.LastPassedFloor = msg.NewState.LastPassedFloor
 				tmpState.Moving = msg.NewState.Moving
@@ -109,7 +109,7 @@ func Run(
 				tmpState.DoorOpen = msg.NewState.DoorOpen
 				tmpState.Valid = true
 				states[msg.Sender] = tmpState
-				statetype.DeepOrdersetCopy(msg.NewState.Orders, states[msg.Sender].Orders)
+				state.DeepOrdersetCopy(msg.NewState.Orders, states[msg.Sender].Orders)
 				for btnType, floorOrders := range states[msg.Sender].Orders {
 					if btnType != driver.Command {
 						for floor, isSet := range floorOrders {
@@ -144,7 +144,7 @@ func Run(
 			driver.SetBtnLamp(completed, driver.Down, false)
 			driver.SetBtnLamp(completed, driver.Command, false)
 			states[localIp] = tmpState
-			statetype.DeleteSavedOrder(completed)
+			state.DeleteSavedOrder(completed)
 			sendMsg <- com.SensorEventMsg{com.StoppingToFinishOrder, states[localIp].CreateCopy(), localIp}
 
 		case <-doorClosed:
@@ -226,7 +226,7 @@ func Run(
 				if !states[localIp].Orders.IsOrder(buttonClick) {
 					states[localIp].Orders.AddOrder(buttonClick)
 					driver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
-					statetype.SaveInternalOrder(buttonClick.Floor)
+					state.SaveInternalOrder(buttonClick.Floor)
 					sendMsg <- com.OrderEventMsg{buttonClick, states[localIp].CreateCopy(), localIp}
 					fmt.Println("\033[34m"+"Manager: New internal order at floor", buttonClick.Floor, "\033[0m")
 				}
@@ -321,14 +321,14 @@ func Run(
 	}
 }
 
-func initializeState(states map[string]statetype.State, ip string) {
-	states[ip] = statetype.State{-1, elevator.GetCurrentDirection(), false, make(statetype.Orderset), false, false}
-	states[ip].Orders[driver.Up] = make(statetype.FloorOrders)
-	states[ip].Orders[driver.Down] = make(statetype.FloorOrders)
-	states[ip].Orders[driver.Command] = make(statetype.FloorOrders)
+func initializeState(states map[string]state.State, ip string) {
+	states[ip] = state.State{-1, elevator.GetCurrentDirection(), false, make(state.Orderset), false, false}
+	states[ip].Orders[driver.Up] = make(state.FloorOrders)
+	states[ip].Orders[driver.Down] = make(state.FloorOrders)
+	states[ip].Orders[driver.Command] = make(state.FloorOrders)
 }
 
-func getHighestIp(states map[string]statetype.State) string {
+func getHighestIp(states map[string]state.State) string {
 	highestIp := localIp
 	for ip, _ := range states {
 		remoteIpHighest, err := networking.HasHighestIp(ip, highestIp)
@@ -342,7 +342,7 @@ func getHighestIp(states map[string]statetype.State) string {
 	return highestIp
 }
 
-func getSecondHighestIp(states map[string]statetype.State) (string, bool) {
+func getSecondHighestIp(states map[string]state.State) (string, bool) {
 	ips := make([]int, 0)
 	ipMap := make(map[int]string)
 	for ip, _ := range states {
