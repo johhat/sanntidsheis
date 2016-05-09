@@ -155,6 +155,11 @@ func Run(
 		case disconnected := <-disconnected:
 			fmt.Println("\033[34m"+"Disconnected:", disconnected, "\033[0m")
 
+			if errorState {
+				delete(states, disconnected)
+				break
+			}
+
 			highestIp := getHighestIp(states)
 			secondHighestIp, ok := getSecondHighestIp(states)
 			shouldRedistribute := (highestIp == localIp || (highestIp == disconnected && localIp == secondHighestIp))
