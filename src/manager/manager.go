@@ -95,7 +95,6 @@ func Run(
 					break
 				}
 
-				fmt.Println("\033[34m"+"Manager: received InitialStateMsg from", msg.Sender, "\033[0m")
 				tmpState := states[msg.Sender]
 				tmpState.LastPassedFloor = msg.NewState.LastPassedFloor
 				tmpState.Direction = msg.NewState.Direction
@@ -129,7 +128,6 @@ func Run(
 			}
 
 		case completed := <-completedFloor:
-			fmt.Println("\033[34m"+"Manager: Order(s) at floor", completed, "finished"+"\033[0m")
 			tmpState := states[localIp]
 			tmpState.Moving = false
 			tmpState.DoorOpen = true
@@ -149,11 +147,9 @@ func Run(
 
 		case connected := <-connected:
 			initializeState(states, connected)
-			fmt.Println("\033[34m"+"Manager: sending InitialStateMsg to", connected, "\033[0m")
 			sendMsg <- com.InitialStateMsg{states[localIp].CreateCopy(), localIp}
 
 		case disconnected := <-disconnected:
-			fmt.Println("\033[34m"+"Disconnected:", disconnected, "\033[0m")
 
 			if errorState {
 				delete(states, disconnected)
@@ -174,9 +170,9 @@ func Run(
 			}
 
 			//redistribute orders where the responsible redistributor has died
-			fmt.Println("\033[34m"+"\tManager: highest ip:", highestIp, "secondHighestIp:", secondHighestIp, "\033[0m")
+			fmt.Println("\tManager: highest ip:", highestIp, "secondHighestIp:", secondHighestIp)
 			if disconnected == highestIp && localIp == secondHighestIp && ok {
-				fmt.Println("\033[34m" + "Manager: highest ip disconnected, redistributing redistributed orders" + "\033[0m")
+				fmt.Println("Manager: highest ip disconnected, redistributing redistributed orders")
 				for button := range redistributedOrders {
 					delete(redistributedOrders, button)
 					go func(btnClick driver.ClickEvent) {
@@ -187,9 +183,9 @@ func Run(
 
 			// Redistribute normal orders, or add them to the list of orders being redistributed by someone else
 			if shouldRedistribute {
-				fmt.Println("\033[34m" + "\tRedistributing" + "\033[0m")
+				fmt.Println("\tRedistributing")
 			} else {
-				fmt.Println("\033[34m" + "\tWe should not redistribute, adding orders to redistributed orders" + "\033[0m")
+				fmt.Println("\tWe should not redistribute, adding orders to redistributed orders")
 			}
 			for btnType, floorOrders := range states[disconnected].Orders {
 				if btnType != driver.Command {
@@ -227,13 +223,13 @@ func Run(
 					driver.SetBtnLamp(buttonClick.Floor, buttonClick.Type, true)
 					state.SaveInternalOrder(buttonClick.Floor)
 					sendMsg <- com.OrderEventMsg{buttonClick, states[localIp].CreateCopy(), localIp}
-					fmt.Println("\033[34m"+"Manager: New internal order at floor", buttonClick.Floor, "\033[0m")
+					fmt.Println("Manager: New internal order at floor", buttonClick.Floor)
 				}
 			} else {
 				exists := false
 				for _, state := range states {
 					if state.Orders.IsOrder(buttonClick) {
-						fmt.Println("\033[34m"+"Order already exists:", buttonClick, "\033[0m")
+						fmt.Println("Order already exists:", buttonClick)
 						exists = true
 						break
 					}
@@ -241,8 +237,8 @@ func Run(
 				if exists {
 					break
 				}
-				fmt.Println("\033[34m"+"Manager: New", buttonClick, "\033[0m")
-				bestIp := localIp                          // Local elevator is default
+				fmt.Println("Manager: New", buttonClick)
+				bestIp := localIp                          
 				var shortestResponseTime float32 = 99999.9 //Inf
 				for ip, state := range states {
 					fmt.Println("IP:", ip)
@@ -251,7 +247,7 @@ func Run(
 						bestIp = ip
 					}
 				}
-				fmt.Println("Best IP for", buttonClick, "is", bestIp)
+				fmt.Println("Best IP for", buttonClick, "is", bestIp,"\n")
 				if bestIp == localIp {
 					tmpState := states[localIp]
 					tmpState.Orders.AddOrder(buttonClick)
@@ -268,9 +264,8 @@ func Run(
 			if errorState {
 				break
 			}
-			fmt.Println("\033[34m"+"Sensorevent", sensorEvent, "\033[0m")
 			if sensorEvent == -1 && !states[localIp].Moving {
-				fmt.Println("\033[34m" + "Manager: left floor without moving" + "\033[0m")
+				fmt.Println("Manager: left floor without moving")
 				go func() {
 					externalError <- true
 				}()
@@ -292,7 +287,6 @@ func Run(
 			}
 
 		case <-startedMoving:
-			fmt.Println("\033[34m" + "Manager: Starting to move" + "\033[0m")
 			tmpState := states[localIp]
 			tmpState.Moving = true
 			states[localIp] = tmpState
@@ -303,11 +297,9 @@ func Run(
 			states[localIp] = tmpState
 
 		case <-passingFloor:
-			fmt.Println("\033[34m" + "Manager: Passing floor" + "\033[0m")
 			sendMsg <- com.SensorEventMsg{com.PassingFloor, states[localIp].CreateCopy(), localIp}
 
 		case <-elevatorError:
-			fmt.Println("\033[34m" + "Manager: Entering error state" + "\033[0m")
 			errorState = true
 			setNetworkStatus <- false
 			for ip, _ := range states {

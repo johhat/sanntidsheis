@@ -96,10 +96,8 @@ func Run(sendMsgChan <-chan com.Message,
 			setTcpStatus <- status
 
 			if status {
-				log.Println("Setting network module to active")
 				stopUdpHeartbeats = udpSendHeartbeats(udpBroadcastMsg)
 			} else {
-				log.Println("Setting network module to inactive")
 				close(stopUdpHeartbeats)
 			}
 		}
@@ -148,7 +146,7 @@ func handleTcpClient(client tcp.ClientInterface,
 			}
 
 			clientDisconnected <- client.Ip
-			log.Println("End of handleTcpCLient for ip", client.Ip)
+			log.Println("Disconnected: ", client.Ip)
 			return
 		}
 	}

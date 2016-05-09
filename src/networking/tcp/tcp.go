@@ -63,7 +63,6 @@ func (c *client) RecieveFrom() <-chan bool {
 			}
 			close(signalReturn)
 			close(c.chs.recvMsg)
-			log.Println("End of RecieveFrom from", c.ip)
 		}()
 
 		reader := bufio.NewReader(c.conn)
@@ -74,6 +73,9 @@ func (c *client) RecieveFrom() <-chan bool {
 			bytes, err := reader.ReadBytes('\n')
 
 			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					return
+				}				
 				log.Println("TCP recv error. Connection: ", c.ip, " error:", err)
 				return
 			}
@@ -103,7 +105,6 @@ func (c *client) SendTo() <-chan bool {
 			case <-c.chs.pipeIsClosed:
 			}
 			close(signalReturn)
-			log.Println("End of SendTo from", c.ip)
 		}()
 
 		var b bytes.Buffer
@@ -120,6 +121,9 @@ func (c *client) SendTo() <-chan bool {
 				b.Reset()
 
 				if err != nil {
+					if strings.Contains(err.Error(), "use of closed network connection") {
+						return
+					}
 					log.Println("TCP send error. Connection: ", c.ip, " error:", err)
 					return
 				}
@@ -182,9 +186,7 @@ func handleConnection(connection net.Conn, addClient chan<- client, rmClient cha
 		close(client.chs.pipeIsClosed)
 		close(mergeChanDone)
 		connection.Close()
-		log.Printf("Connection from %v closed.\n", connection.RemoteAddr())
 		rmClient <- client
-		log.Println("End of TCP handleconnection for ip", client.ip)
 	}()
 
 	signalConnError := mergeChans(
@@ -249,11 +251,11 @@ func listen(addClient chan<- client, rmClient chan<- client, stopListener <-chan
 			connection, err := listener.Accept()
 
 			if err != nil {
-				log.Println("Error in TCP listener:", err)
 
 				if strings.Contains(err.Error(), "use of closed network connection") {
 					return
 				} else {
+					log.Println("Error in TCP listener:", err)
 					continue
 				}
 			}
@@ -324,10 +326,8 @@ func Init(tcpClient chan<- ClientInterface, tcpDial <-chan DialRequest,setStatus
 			status = setTo
 
 			if setTo {
-				log.Println("Setting TCP module to active")
 				go listen(addClient, rmClient, stopListener)
 			} else {
-				log.Println("Setting TCP module to inactive")
 				stopListener <- true
 				closeAllConnections <- true
 			}
