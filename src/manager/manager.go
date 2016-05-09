@@ -170,6 +170,11 @@ func Run(
 
 		case disconnected := <-disconnected_chan:
 			fmt.Println("\033[34m"+"Disconnected:", disconnected, "\033[0m")
+
+			highestIp := getHighestIp(states)
+			secondHighestIp, ok := getSecondHighestIp(states)
+			shouldRedistribute := (highestIp == localIp || (highestIp == disconnected && localIp == secondHighestIp))
+
 			//Redistribute unconfirmed orders
 			for order := range unconfirmedOrders {
 				if order.Receiver == disconnected {
@@ -179,11 +184,9 @@ func Run(
 				}
 			}
 
-			highestIp := getHighestIp(states)
-			secondHighestIp, ok := getSecondHighestIp(states)
+			//redistribute orders where the responsible redistributor has died
 			fmt.Println("\033[34m"+"\tManager: highest ip:", highestIp, "secondHighestIp:", secondHighestIp, "\033[0m")
 			if disconnected == highestIp && localIp == secondHighestIp && ok {
-				//redistribute redistributed orders
 				fmt.Println("\033[34m" + "Manager: highest ip disconnected, redistributing redistributed orders" + "\033[0m")
 				for button := range redistributedOrders {
 					delete(redistributedOrders, button)
@@ -193,14 +196,12 @@ func Run(
 				}
 			}
 
-			// For every external order that needs to be redistributed
-			shouldRedistribute := (highestIp == localIp || (highestIp == disconnected && localIp == secondHighestIp))
+			// Redistribute normal orders, or add them to the list of orders being redistributed by someone else
 			if shouldRedistribute {
 				fmt.Println("\033[34m" + "\tRedistributing" + "\033[0m")
 			} else {
 				fmt.Println("\033[34m" + "\tWe should not redistribute, adding orders to redistributed orders" + "\033[0m")
 			}
-
 			for btnType, floorOrders := range states[disconnected].Orders {
 				if btnType != driver.Command {
 					for floor, isSet := range floorOrders {
@@ -216,6 +217,7 @@ func Run(
 					}
 				}
 			}
+
 			delete(states, disconnected)
 
 		case <-stopButtonChan:

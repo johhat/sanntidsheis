@@ -88,7 +88,6 @@ func main() {
 		log.Fatal("[FATAL]\tUser terminated program")
 	}()
 
-	time.Sleep(500 * time.Millisecond) //Todo: Make network module default to disconnect state
 	networking.NetworkLoop(sendMsgChan, recvMsgChan, connected, disconnected, setNetworkStatus)
 
 }
